@@ -636,6 +636,12 @@ name = "hubei_zfwj_protocol"
 path = "examples/sites/hubei_zfwj_protocol.rs"
 required-features = ["camoufox", "signer"]
 
+# 企查查账号密码登录:切换密码表单、环境变量填充、识别极验滑块/点选并在有头窗口等待用户完成。
+[[example]]
+name = "qcc_login"
+path = "examples/sites/qcc_login.rs"
+required-features = ["cdp"]
+
 # 路飞学城(luffycity)播放页:CDP 监听抓 polyv secure JSON + HLS m3u8 + 课程接口(让浏览器解密,库只监听)。
 [[example]]
 name = "luffycity_capture"

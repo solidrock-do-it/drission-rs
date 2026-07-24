@@ -125,6 +125,15 @@ HL=0 cargo run --example bilibili_covers         # 有头,看着它跑
 | [bilibili_listen_long](sites/bilibili_listen_long.rs) | bilibili 多 P 视频页连续抓每分集 playurl 签名(wbi `w_rid`/`wts`) | 🌐 |
 | [hubei_zfwj_csv](sites/hubei_zfwj_csv.rs) | 湖北省人民政府「政府文件」公开列表:动态翻页,逐条进详情页抽正文/发文字号/来源并导出 CSV | 🌐 · cdp |
 | [hubei_zfwj_protocol](sites/hubei_zfwj_protocol.rs) | 湖北省政府文件纯协议版:SessionPage 抓挑战页,本地 JS 引擎解 challenge 后抓列表/详情并导出 CSV | 🌐 · camoufox,signer |
+| [qcc_login](sites/qcc_login.rs) | 企查查账号密码登录:打开密码表单、环境变量安全填充、识别极验滑块/点选并在有头窗口等待用户完成,持久 profile 复用登录态 | 🌐 · cdp |
+
+```bash
+# probe:只验证登录表单选择器,不提交
+cargo run --example qcc_login
+
+# 实际登录:默认有头,验证码在浏览器窗口中完成
+QCC_USERNAME='用户名' QCC_PASSWORD='密码' cargo run --example qcc_login
+```
 
 ## 验证码·字符 OCR(ocr/,`--features ocr`)
 
