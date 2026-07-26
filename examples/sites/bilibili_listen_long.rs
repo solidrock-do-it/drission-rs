@@ -14,7 +14,9 @@
 use std::collections::HashSet;
 use std::time::Duration;
 
-use drission::prelude::*;
+// 本例是 camoufox 演示;--all-features 下 prelude 的同名 canonical 类型指向 cdp,故直接从 browser/launcher 取 camoufox 后端类型。
+use drission::browser::Browser;
+use drission::launcher::BrowserOptions;
 
 #[tokio::main]
 async fn main() -> drission::Result<()> {

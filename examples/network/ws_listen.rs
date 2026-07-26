@@ -16,7 +16,11 @@
 
 use std::time::Duration;
 
-use drission::prelude::*;
+// --all-features(camoufox+cdp)时 prelude 的 canonical 名(Browser/WsFilter/WsDirection/BrowserOptions)指向 cdp;
+// 本例是 camoufox 演示,显式取回 camoufox 类型(遮蔽 glob)。这些名已覆盖本例全部 drission 项,prelude glob 无剩余用途,
+// 保留它会触发 unused_imports(clippy 非零),故此例不引入 `use drission::prelude::*;`。
+use drission::browser::{Browser, WsDirection, WsFilter};
+use drission::launcher::BrowserOptions;
 use futures_util::{SinkExt, StreamExt};
 use tokio::net::TcpListener;
 use tokio_tungstenite::accept_async;

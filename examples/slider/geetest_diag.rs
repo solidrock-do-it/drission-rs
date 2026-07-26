@@ -8,7 +8,9 @@
 use std::path::Path;
 use std::time::Duration;
 
-use drission::prelude::*;
+// --all-features(camoufox+cdp)时 prelude 的 canonical 名指向 cdp;本例是 camoufox 演示,显式取回 camoufox 类型;本例未再用到 prelude 其它符号,故不引 glob。
+use drission::browser::Browser;
+use drission::launcher::BrowserOptions;
 use tokio::time::sleep;
 
 const DEFAULT_URL: &str = "https://demos.geetest.com/slide-float.html";

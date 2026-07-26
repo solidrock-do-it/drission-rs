@@ -317,7 +317,7 @@ pub fn select_plan(formats: &[Format], q: &str) -> Option<Plan> {
     };
     let pick_v = |vs: &[&Format]| -> Option<Format> {
         let mut cand: Vec<&&Format> = vs.iter().collect();
-        cand.sort_by(|a, b| (b.height, b.fps, b.bitrate).cmp(&(a.height, a.fps, a.bitrate)));
+        cand.sort_by_key(|b| std::cmp::Reverse((b.height, b.fps, b.bitrate)));
         match target {
             None => cand.first().map(|f| (**f).clone()),
             Some(h) => cand

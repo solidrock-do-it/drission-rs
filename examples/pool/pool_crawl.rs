@@ -23,6 +23,9 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use drission::prelude::*;
+// --all-features(camoufox+cdp)时 prelude 的 canonical 名指向 cdp;本例是 camoufox 演示,显式取回 camoufox 类型(遮蔽 glob)。
+use drission::browser::Tab;
+use drission::launcher::BrowserOptions;
 
 /// 测试用临时文件路径(写到项目 target 下,在 home 内、已 gitignore,规避 /var/folders 沙箱)。
 fn tmp_path(name: &str) -> PathBuf {

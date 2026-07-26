@@ -7,7 +7,10 @@
 //!
 //! 运行:`cargo run --example extras_demo --no-default-features --features camoufox`   末行 ALL CHECKS PASSED / FAILED。
 
-use drission::prelude::*;
+// --all-features(camoufox+cdp)时 prelude 的 canonical 名指向 cdp;本例是 camoufox 演示,显式取回 camoufox 类型(遮蔽 glob)。
+// 本例除已显式取回的具名类型外未引用其它 camoufox 独有类型,遮蔽后 prelude glob 已无剩余用途,移除以过 clippy。
+use drission::browser::{Browser, CookieParam};
+use drission::launcher::BrowserOptions;
 
 #[tokio::main]
 async fn main() {

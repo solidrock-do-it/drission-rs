@@ -4,12 +4,15 @@
 //! 覆盖:① img 图源读取 ② 拼图模板法(无 fullbg)③ 闭环拖动 + 把手:拼图比例标定(本例 0.9 非 1:1)
 //! ④ `SuccessCheck::Js` 自定义判定。完全离线(`file://` 本地页,写在项目目录下避开 macOS 沙箱)。
 //!
-//! 运行:`cargo run --example slider_local --no-default-features --features slider`(默认 headless;`HL=0` 看界面)。末行 ALL CHECKS PASSED。
+//! 运行:`cargo run --example slider_local --no-default-features --features camoufox,slider`(默认 headless;`HL=0` 看界面)。末行 ALL CHECKS PASSED。
 
 use std::path::Path;
 use std::time::Duration;
 
 use drission::prelude::*;
+// --all-features(camoufox+cdp)时 prelude 的 canonical 名指向 cdp;本例是 camoufox 演示,显式取回 camoufox 类型(遮蔽 glob)。
+use drission::browser::Browser;
+use drission::launcher::BrowserOptions;
 use tokio::time::sleep;
 
 /// 合成滑块页:背景图(带暗色方形缺口 + 亮边)+ 拼图块(同形方块),把手拖动按 0.9 比例带动拼图,

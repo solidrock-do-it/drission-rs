@@ -8,7 +8,9 @@
 
 use std::time::Duration;
 
-use drission::prelude::*;
+// --all-features(camoufox+cdp)时 prelude 的 canonical 名解析到 cdp;本例是 camoufox 演示,故不引 prelude glob,直接从 camoufox 后端显式导入所需类型。
+use drission::browser::Browser;
+use drission::launcher::BrowserOptions;
 
 #[tokio::main]
 async fn main() -> drission::Result<()> {

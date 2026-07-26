@@ -32,7 +32,7 @@ const USERNAME_INPUT: &str = "css:input[placeholder='请输入手机号码/用�
 const PASSWORD_INPUT: &str = "css:input[placeholder='请输入密码']";
 const CONSENT_INPUT: &str = ".qcc-login-phone-tip input[type='checkbox']";
 const CONSENT_LABEL: &str = ".qcc-login-phone-tip .qccd-checkbox-wrapper";
-const LOGIN_SUBMIT: &str = ".qcc-login-quick-login button";
+const LOGIN_SUBMIT: &str = "xpath://button[normalize-space()='立即登录']";
 
 /// 仅观察页面可见状态,不读取 Cookie、localStorage 或输入框内容。
 const PAGE_STATE_JS: &str = r#"
@@ -74,9 +74,21 @@ const PAGE_STATE_JS: &str = r#"
   if (messageText) return { kind: 'rejected', message: messageText.slice(0, 240) };
 
   const loginModal = firstShown('.qcc-login');
+  const loginText = loginModal ? (loginModal.innerText || '').replace(/\s+/g, ' ').trim() : '';
+  const loginErrors = [
+    '账号和密码不匹配', '账号或密码', '密码错误', '账号不存在',
+    '用户不存在', '手机号未注册', '登录失败'
+  ];
+  if (loginText && loginErrors.some(word => loginText.includes(word))) {
+    return { kind: 'rejected', message: loginText.slice(0, 240) };
+  }
+
   const loginEntry = firstShown('.qcc-header-login-btn');
   if (!loginModal && !loginEntry) {
     return { kind: 'authenticated', message: '登录弹窗和登录入口均已消失' };
+  }
+  if (!loginModal && loginEntry) {
+    return { kind: 'signed-out', message: '页面仍显示登录入口' };
   }
   return { kind: 'waiting', message: '' };
 })()
@@ -87,6 +99,7 @@ enum PageState {
     Challenge(&'static str),
     Authenticated,
     Rejected(String),
+    SignedOut,
     Waiting,
 }
 
@@ -293,10 +306,12 @@ async fn wait_for_login(
 ) -> drission::Result<()> {
     let deadline = Instant::now() + timeout;
     let mut announced_challenge: Option<&'static str> = None;
+    let mut signed_out_since: Option<Instant> = None;
 
     loop {
         match page_state(tab).await? {
             PageState::Challenge(kind) => {
+                signed_out_since = None;
                 if announced_challenge != Some(kind) {
                     println!("[*] {kind};请在浏览器窗口中完成,脚本将继续等待登录结果");
                     announced_challenge = Some(kind);
@@ -314,7 +329,14 @@ async fn wait_for_login(
             PageState::Rejected(message) => {
                 return Err(Error::msg(format!("站点返回登录提示:{message}")));
             }
-            PageState::Waiting => {}
+            PageState::SignedOut => match signed_out_since {
+                Some(since) if since.elapsed() >= Duration::from_secs(2) => {
+                    return Err(Error::msg("验证结束后页面仍处于未登录状态"));
+                }
+                Some(_) => {}
+                None => signed_out_since = Some(Instant::now()),
+            },
+            PageState::Waiting => signed_out_since = None,
         }
 
         if Instant::now() >= deadline {
@@ -337,6 +359,7 @@ async fn page_state(tab: &ChromiumTab) -> drission::Result<PageState> {
         "challenge-other" => PageState::Challenge("检测到交互验证"),
         "authenticated" => PageState::Authenticated,
         "rejected" => PageState::Rejected(message),
+        "signed-out" => PageState::SignedOut,
         _ => PageState::Waiting,
     })
 }

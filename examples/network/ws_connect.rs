@@ -16,6 +16,9 @@
 use std::time::Duration;
 
 use drission::prelude::*;
+// --all-features(camoufox+cdp)时 prelude 的 canonical 名指向 cdp;本例是 camoufox 演示,显式取回 camoufox 类型(遮蔽 glob)。
+use drission::browser::Browser;
+use drission::launcher::BrowserOptions;
 
 const PNG_MAGIC: &[u8] = &[0x89, 0x50, 0x4E, 0x47];
 

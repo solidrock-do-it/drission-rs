@@ -13,7 +13,9 @@
 use std::collections::HashSet;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use drission::prelude::*;
+// --all-features(camoufox+cdp)时 prelude 的 canonical 名指向 cdp;本例是 camoufox 演示,显式取回 camoufox 类型;本例未再用到 prelude 其它符号,故不引 glob。
+use drission::browser::Browser;
+use drission::launcher::BrowserOptions;
 use serde_json::{Value, json};
 
 /// 页面现场探针:为何没抓到 playurl?——是单P(无分集)、登录墙、还是结构变了。

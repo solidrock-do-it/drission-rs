@@ -334,7 +334,7 @@ fn run_challenge_js_quickjs(setup: &str, challenge_js: &str) -> drission::Result
     let rt = Runtime::new().map_err(|e| drission::Error::msg(e.to_string()))?;
     let ctx = Context::full(&rt).map_err(|e| drission::Error::msg(e.to_string()))?;
     ctx.with(|ctx| {
-        js_run(&ctx, &setup)?;
+        js_run(&ctx, setup)?;
         let js_err = js_run(&ctx, challenge_js).err();
         let _ = js_run(
             &ctx,
@@ -999,9 +999,7 @@ fn extract_js_string(src: &str, marker: &str) -> Option<String> {
             out.push(ch);
             continue;
         }
-        let Some(esc) = chars.next() else {
-            return None;
-        };
+        let esc = chars.next()?;
         match esc {
             '"' => out.push('"'),
             '\'' => out.push('\''),

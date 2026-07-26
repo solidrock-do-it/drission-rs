@@ -9,7 +9,10 @@
 
 use std::time::Duration;
 
-use drission::prelude::*;
+// --all-features(camoufox+cdp)时 prelude 的 canonical 名指向 cdp;本例是 camoufox 演示,显式取回 camoufox 类型(遮蔽 glob)。
+// 本例未引用任何 camoufox 独有的具名类型,遮蔽后 prelude glob 已无剩余用途,移除以过 clippy。
+use drission::browser::Browser;
+use drission::launcher::BrowserOptions;
 
 const PAGE: &str = r#"<!doctype html><html><head><meta charset="utf-8"><title>dl</title></head>
 <body>

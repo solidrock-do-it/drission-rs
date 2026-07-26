@@ -14,6 +14,10 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use drission::prelude::*;
+// `--all-features`(camoufox + cdp 并存)时 prelude 的 `Browser`/`ShotOpts` 等 canonical 名指向 cdp;
+// 本例是 camoufox 演示,显式取回 camoufox 类型(遮蔽 glob),使两种编译档都成立。
+use drission::browser::{Browser, ImageFormat, ShotOpts};
+use drission::launcher::BrowserOptions;
 
 const PNG_MAGIC: &[u8] = &[0x89, 0x50, 0x4E, 0x47];
 const JPEG_MAGIC: &[u8] = &[0xFF, 0xD8];

@@ -11,6 +11,9 @@
 //! 结果落 `drission_session_result.json`,末行打印 ALL CHECKS PASSED / FAILED。
 
 use drission::prelude::*;
+// --all-features(camoufox+cdp)时 prelude 的 canonical 名指向 cdp;本例是 camoufox 演示,显式取回 camoufox 类型(遮蔽 glob)。
+use drission::browser::{Browser, CookieParam};
+use drission::launcher::BrowserOptions;
 use serde_json::json;
 
 fn record(checks: &mut Vec<(String, bool, String)>, name: &str, ok: bool, detail: String) {

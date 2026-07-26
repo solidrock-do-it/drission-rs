@@ -10,11 +10,14 @@
 //! (红=算法落点、绿=home)验证算法通用性。**目标是缺口找得准 + 通用**,非过顶象(其轨迹/IP 行为
 //! 风控会把对齐正确的拖动也弹回,与缺口算法无关)。
 //!
-//! 运行:`HL=0 cargo run --example dx_slide --no-default-features --features slider`(有头);`N=张数`(默认 5)、`NODRAG=1` 只算不拖。
+//! 运行:`HL=0 cargo run --example dx_slide --no-default-features --features camoufox,slider`(有头);`N=张数`(默认 5)、`NODRAG=1` 只算不拖。
 
 use std::time::Duration;
 
 use drission::prelude::*;
+// --all-features(camoufox+cdp)时 prelude 的 canonical 名指向 cdp;本例是 camoufox 演示,显式取回 camoufox 类型(遮蔽 glob)。
+use drission::browser::{Browser, Tab};
+use drission::launcher::BrowserOptions;
 use tokio::time::sleep;
 
 const DEFAULT_URL: &str = "https://cdn.dingxiang-inc.com/ctu-group/captcha-ui/demo/";

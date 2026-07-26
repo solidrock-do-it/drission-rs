@@ -39,13 +39,17 @@ jobs:
         with:
           components: clippy
       - uses: Swatinem/rust-cache@v2
-      # ── 按后端分开 clippy ──────────────────────────────────────────────────
-      # 两后端的统一名(Browser/Tab/…)是 **cdp 优先**:同时开 cdp+camoufox 时 canonical=cdp,
-      # 此时 camoufox 示例(用 canonical 名)会被按 cdp 类型编译而失败 —— 故 **示例必须按后端分开编**。
+      # ── 按后端 clippy + 双后端并存回归门禁 ────────────────────────────────
+      # 两后端的统一名(Browser/Tab/…)是 **cdp 优先**:同时开 cdp+camoufox 时 canonical=cdp。
+      # camoufox 示例已显式从 drission::browser / drission::launcher 取回 camoufox 类型,故三种档
+      #(仅 cdp / 仅 camoufox / 两者并存)都能编过。三档都跑,任何一档破坏即拦下。
       # 默认后端(cdp):lib + cdp 示例。
       - run: cargo clippy --all-targets -- -D warnings
       # Camoufox 后端(关掉 cdp,canonical=camoufox):lib + camoufox/slider 示例。
       - run: cargo clippy --all-targets --no-default-features --features camoufox,slider -- -D warnings
+      # 双后端并存(cdp+camoufox,canonical=cdp):camoufox 示例必须仍编过 —— 防 prelude 冲突回归
+      #(历史上 `--all-features --all-targets` 曾因此挂掉一批 camoufox 示例)。ocr/slider 覆盖各类示例。
+      - run: cargo clippy --all-targets --features camoufox,slider,ocr -- -D warnings
       # 零后端(仅后端无关模块):lib 必须干净。
       - run: cargo clippy --lib --no-default-features -- -D warnings
 

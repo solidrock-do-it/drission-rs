@@ -8,12 +8,15 @@
 //! headless 也能 `success:true`。同一预设实测可过 **slide-float / slide-custom** 两种模式
 //! (`URL` 环境变量切换)。换其它厂商滑块只需另写一个 `SliderConfig`(见 `examples/slider_local`)。
 //!
-//! 运行:`cargo run --example geetest_slide --no-default-features --features slider`(默认 headless 跑 slide-float;`HL=0` 看界面,
+//! 运行:`cargo run --example geetest_slide --no-default-features --features camoufox,slider`(默认 headless 跑 slide-float;`HL=0` 看界面,
 //! `TRY=8` 调重试次数,`URL=https://demos.geetest.com/slide-custom.html` 换 custom 模式)
 
 use std::time::Duration;
 
 use drission::prelude::*;
+// --all-features(camoufox+cdp)时 prelude 的 canonical 名指向 cdp;本例是 camoufox 演示,显式取回 camoufox 类型(遮蔽 glob)。
+use drission::browser::Browser;
+use drission::launcher::BrowserOptions;
 use tokio::time::sleep;
 
 const DEFAULT_URL: &str = "https://demos.geetest.com/slide-float.html";

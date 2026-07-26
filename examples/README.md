@@ -14,8 +14,8 @@
 cargo run --example cdp_demo
 # Camoufox 系示例(下表绝大多数):务必关掉默认 cdp,只开 camoufox
 cargo run --example <名字> --no-default-features --features camoufox
-# 滑块(slider 自带 camoufox)/ 再叠加 ocr
-cargo run --example <名字> --no-default-features --features slider
+# 滑块(后端无关;这些示例用 Camoufox)/ 再叠加 ocr
+cargo run --example <名字> --no-default-features --features camoufox,slider
 cargo run --example <名字> --no-default-features --features camoufox,ocr
 # cdp + ocr(点选 / 检测)
 cargo run --example yidun_click_stable --features cdp,ocr
@@ -158,7 +158,7 @@ QCC_USERNAME='用户名' QCC_PASSWORD='密码' cargo run --example qcc_login
 
 > 自训管线见 [`docs/OCR模型热替换.md`](../docs/OCR模型热替换.md);样本库/数据集脚本在仓库根 `yidun-train/tools/`。
 
-## 验证码·图片滑块缺口(slider/,`--features slider`)
+## 验证码·图片滑块缺口(slider/,`--features camoufox,slider`)
 
 | 示例 | 说明 | 需要 |
 |---|---|---|
