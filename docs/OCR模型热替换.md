@@ -23,7 +23,7 @@
 | **原地热替换**模型(留字符集) | `ocr.set_model(&onnx)?` |
 | **原地热替换**模型 + 字符集 | `ocr.set_model_with_charset(&onnx, charset)?` |
 | 检测模型热替换 | `det.set_model(&onnx)?` |
-| 进程级默认(`tab.ocr_image`)热替换 | `ocr::set_default_ocr(ocr).await`(camoufox) |
+| 进程级默认(`tab.ocr_image`)热替换 | `ocr::set_default_ocr(ocr).await`(cdp / camoufox 通用) |
 | 默认模型缓存路径 | `Ocr::default_model_path().await?` / `Det::default_model_path().await?` |
 | 当前字符集大小 | `ocr.charset_len()` |
 

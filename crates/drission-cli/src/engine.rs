@@ -122,6 +122,39 @@ impl BrowserState {
                     .await?;
                 json!({ "selector": selector, "displayed": ok })
             }
+            EngineCommand::SaveState { path } => {
+                self.active_tab()?.save_state(&path).await?;
+                json!({ "saved": path })
+            }
+            EngineCommand::LoadState { path } => {
+                self.active_tab()?.load_state(&path).await?;
+                json!({ "loaded": path })
+            }
+            EngineCommand::Ocr { selector } => {
+                #[cfg(feature = "ocr")]
+                {
+                    let text = self.active_tab()?.ocr(&selector).await?;
+                    json!({ "selector": selector, "text": text })
+                }
+                #[cfg(not(feature = "ocr"))]
+                {
+                    let _ = selector;
+                    anyhow::bail!("此 drs 未启用 ocr feature;请安装/构建带 --features ocr 的 drs")
+                }
+            }
+            EngineCommand::SolveSlider { preset, index } => {
+                #[cfg(feature = "slider")]
+                {
+                    self.active_tab()?.solve_slider(&preset, index).await?
+                }
+                #[cfg(not(feature = "slider"))]
+                {
+                    let _ = (preset, index);
+                    anyhow::bail!(
+                        "此 drs 未启用 slider feature;请安装/构建带 --features slider 的 drs"
+                    )
+                }
+            }
             EngineCommand::ListenStart { keywords, xhr_only } => {
                 self.active_tab()?.listen_start(&keywords, xhr_only).await?
             }

@@ -456,6 +456,7 @@ drs mcp --headless --standalone
 - `browser_eval`
 - `browser_click`
 - `browser_type`
+- `browser_press`
 - `browser_wait`
 - `browser_screenshot`
 - `network_listen_start`
@@ -473,6 +474,8 @@ drs mcp --headless --standalone
 - `identity_assets_reconcile_runtime`
 - `identity_assets_health`
 - `identity_assets_sweep`
+
+`browser_press` 在当前标签按一个键(如 `Enter`、`Tab`、`Escape`、`ArrowDown`),可选 `selector` 先聚焦某元素再按;`browser_type` 只填字符、不产生按键提交,需要回车提交/切换焦点/方向键时用 `browser_press`。
 
 `browser_screenshot` 默认保存 PNG 并返回路径;传 `inline=true` 时同时返回 base64 与 MCP image content。
 `browser_extract` 打开 URL(或复用当前标签)并返回 `title` / `url` / `text` / `outline`;可选 `include_html`、`include_ax_json`、`pass_cf`、`wait_selector`、`screenshot_out`。

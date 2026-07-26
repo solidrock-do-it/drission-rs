@@ -192,6 +192,18 @@ impl DrsMcp {
     }
 
     #[tool(
+        name = "browser_press",
+        description = "Press a key in the active tab, optionally scoped to an element (e.g. Enter, Tab, Escape, ArrowDown)"
+    )]
+    async fn browser_press(&self, Parameters(req): Parameters<PressParams>) -> CallToolResult {
+        self.exec(EngineCommand::Press {
+            key: req.key,
+            selector: req.selector,
+        })
+        .await
+    }
+
+    #[tool(
         name = "browser_wait",
         description = "Wait for an element to be displayed"
     )]
@@ -199,6 +211,48 @@ impl DrsMcp {
         self.exec(EngineCommand::Wait {
             selector: req.selector,
             timeout_ms: req.timeout_ms,
+        })
+        .await
+    }
+
+    #[tool(
+        name = "browser_save_state",
+        description = "Save login state (cookies + localStorage/sessionStorage) of the active tab to a JSON file"
+    )]
+    async fn browser_save_state(&self, Parameters(req): Parameters<PathParams>) -> CallToolResult {
+        self.exec(EngineCommand::SaveState { path: req.path }).await
+    }
+
+    #[tool(
+        name = "browser_load_state",
+        description = "Load login state from a JSON file into the active tab (navigate to the site first, then reload after)"
+    )]
+    async fn browser_load_state(&self, Parameters(req): Parameters<PathParams>) -> CallToolResult {
+        self.exec(EngineCommand::LoadState { path: req.path }).await
+    }
+
+    #[tool(
+        name = "browser_ocr",
+        description = "Recognize a captcha image at a CSS/XPath selector and return the text (drs must be built with the ocr feature)"
+    )]
+    async fn browser_ocr(&self, Parameters(req): Parameters<SelectorParams>) -> CallToolResult {
+        self.exec(EngineCommand::Ocr {
+            selector: req.selector,
+        })
+        .await
+    }
+
+    #[tool(
+        name = "browser_solve_slider",
+        description = "Solve a slider captcha by preset ('geetest' or 'dingxiang'); returns whether it passed"
+    )]
+    async fn browser_solve_slider(
+        &self,
+        Parameters(req): Parameters<SolveSliderParams>,
+    ) -> CallToolResult {
+        self.exec(EngineCommand::SolveSlider {
+            preset: req.preset,
+            index: req.index,
         })
         .await
     }
@@ -440,7 +494,6 @@ impl DrsMcp {
         &self,
         Parameters(req): Parameters<IdentityAssetsReleaseParams>,
     ) -> CallToolResult {
-        let result_json = req.result_json.as_ref().map(Value::to_string);
         result_to_tool_result(
             identity_cmd::release_identity_assets(
                 &req.asset_manifest,
@@ -455,7 +508,7 @@ impl DrsMcp {
                 req.cooldown_seconds,
                 req.next_state.as_deref(),
                 req.message.as_deref(),
-                result_json.as_deref(),
+                req.result_json.as_deref(),
                 req.asset_manifest_out.as_deref(),
                 req.release_out.as_deref(),
                 req.append_release.unwrap_or(false),
@@ -712,6 +765,28 @@ struct TypeParams {
 }
 
 #[derive(Debug, Deserialize, Serialize, JsonSchema)]
+struct PressParams {
+    /// Key name to press, e.g. `Enter`, `Tab`, `Escape`, `ArrowDown`, `a`.
+    key: String,
+    /// Optional element selector to focus before pressing; omit to press on the active element.
+    selector: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize, JsonSchema)]
+struct PathParams {
+    /// File path for the login-state JSON.
+    path: String,
+}
+
+#[derive(Debug, Deserialize, Serialize, JsonSchema)]
+struct SolveSliderParams {
+    /// Slider preset: `geetest` (default) or `dingxiang`.
+    preset: String,
+    /// Instance index for the `dingxiang` preset (ignored otherwise).
+    index: Option<u32>,
+}
+
+#[derive(Debug, Deserialize, Serialize, JsonSchema)]
 struct WaitParams {
     selector: String,
     timeout_ms: Option<u64>,
@@ -839,7 +914,8 @@ struct IdentityAssetsReleaseParams {
     cooldown_seconds: Option<u64>,
     next_state: Option<String>,
     message: Option<String>,
-    result_json: Option<Value>,
+    /// JSON object/array as a string (Claude Code rejects schemars `Value` → schema `true`).
+    result_json: Option<String>,
     asset_manifest_out: Option<PathBuf>,
     release_out: Option<PathBuf>,
     append_release: Option<bool>,
@@ -910,7 +986,12 @@ mod tests {
             "browser_eval",
             "browser_click",
             "browser_type",
+            "browser_press",
             "browser_wait",
+            "browser_save_state",
+            "browser_load_state",
+            "browser_ocr",
+            "browser_solve_slider",
             "browser_screenshot",
             "network_listen_start",
             "network_listen_wait",
@@ -944,7 +1025,12 @@ mod tests {
                 "browser_eval",
                 "browser_click",
                 "browser_type",
+                "browser_press",
                 "browser_wait",
+                "browser_save_state",
+                "browser_load_state",
+                "browser_ocr",
+                "browser_solve_slider",
                 "browser_screenshot",
                 "network_listen_start",
                 "network_listen_wait",

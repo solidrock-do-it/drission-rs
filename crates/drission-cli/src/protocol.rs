@@ -129,6 +129,23 @@ pub enum EngineCommand {
         selector: String,
         timeout_ms: Option<u64>,
     },
+    /// Save login state (cookies + localStorage/sessionStorage) to a JSON file.
+    SaveState {
+        path: String,
+    },
+    /// Load login state from a JSON file into the active tab (navigate to the site first).
+    LoadState {
+        path: String,
+    },
+    /// Recognize a captcha image at `selector` → text (runs only if built with the `ocr` feature).
+    Ocr {
+        selector: String,
+    },
+    /// Solve a slider captcha by preset ("geetest" / "dingxiang") (built with the `slider` feature).
+    SolveSlider {
+        preset: String,
+        index: Option<u32>,
+    },
     ListenStart {
         keywords: Vec<String>,
         xhr_only: bool,

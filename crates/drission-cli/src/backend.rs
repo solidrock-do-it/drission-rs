@@ -279,6 +279,53 @@ impl BackendTab {
         }
     }
 
+    pub async fn save_state(&self, path: &str) -> Result<()> {
+        match self {
+            #[cfg(feature = "cdp")]
+            BackendTab::Cdp(tab) => tab.save_storage_state(path).await?,
+            #[cfg(feature = "camoufox")]
+            BackendTab::Camoufox(tab) => tab.save_storage_state(path).await?,
+        }
+        Ok(())
+    }
+
+    pub async fn load_state(&self, path: &str) -> Result<()> {
+        match self {
+            #[cfg(feature = "cdp")]
+            BackendTab::Cdp(tab) => tab.load_storage_state(path).await?,
+            #[cfg(feature = "camoufox")]
+            BackendTab::Camoufox(tab) => tab.load_storage_state(path).await?,
+        }
+        Ok(())
+    }
+
+    #[cfg(feature = "ocr")]
+    pub async fn ocr(&self, selector: &str) -> Result<String> {
+        Ok(match self {
+            #[cfg(feature = "cdp")]
+            BackendTab::Cdp(tab) => tab.ocr_image(selector).await?,
+            #[cfg(feature = "camoufox")]
+            BackendTab::Camoufox(tab) => tab.ocr_image(selector).await?,
+        })
+    }
+
+    #[cfg(feature = "slider")]
+    pub async fn solve_slider(&self, preset: &str, index: Option<u32>) -> Result<Value> {
+        let r = match self {
+            #[cfg(feature = "cdp")]
+            BackendTab::Cdp(tab) => match preset {
+                "dingxiang" | "dx" => tab.solve_dingxiang_slide(index.unwrap_or(0), None).await?,
+                _ => tab.solve_geetest_slide().await?,
+            },
+            #[cfg(feature = "camoufox")]
+            BackendTab::Camoufox(tab) => match preset {
+                "dingxiang" | "dx" => tab.solve_dingxiang_slide(index.unwrap_or(0), None).await?,
+                _ => tab.solve_geetest_slide().await?,
+            },
+        };
+        Ok(json!({ "passed": r.passed, "attempts": r.attempts, "align_error": r.align_error }))
+    }
+
     pub async fn listen_start(&self, keywords: &[String], xhr_only: bool) -> Result<Value> {
         let refs: Vec<&str> = keywords.iter().map(String::as_str).collect();
         match self {

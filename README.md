@@ -141,6 +141,8 @@ drission = { git = "https://github.com/MageGojo/drission-rs", tag = "v0.4.0", fe
 各 feature 的依赖关系与构建要求以 [Cargo.toml](Cargo.toml) 和
 [API 文档](https://docs.rs/drission)为准。
 
+CDP 与 Camoufox 两个后端的逐条能力对照与选型建议,见[后端能力矩阵](docs/后端能力矩阵.md)。
+
 ## 兼容性
 
 | 项目 | 支持范围 |
