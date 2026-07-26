@@ -351,43 +351,7 @@ impl ChromiumTab {
         Ok(info)
     }
 
-    // ── 登录态快照(storage_state)────────────────────────────────────────────
-
-    /// 导出当前登录态:全部 cookie + 当前源的 localStorage(JSON)。对齐 camoufox `storage_state`。
-    pub async fn storage_state(&self) -> Result<Value> {
-        let cookies = self.core.send("Storage.getCookies", json!({})).await?["cookies"].clone();
-        let ls = self
-            .run_js(
-                "(function(){ try { const o={}; for (let i=0;i<localStorage.length;i++){ const k=localStorage.key(i); o[k]=localStorage.getItem(k);} return JSON.stringify({origin: location.origin, localStorage: o}); } catch(e){ return '{}'; } })()",
-            )
-            .await?;
-        let origin_ls: Value = ls
-            .as_str()
-            .and_then(|s| serde_json::from_str(s).ok())
-            .unwrap_or(json!({}));
-        Ok(json!({ "cookies": cookies, "origins": [origin_ls] }))
-    }
-
-    /// 导入登录态(cookie + 当前源 localStorage)。对齐 camoufox `apply_storage_state`。
-    pub async fn apply_storage_state(&self, state: &Value) -> Result<()> {
-        if let Some(cookies) = state["cookies"].as_array() {
-            self.core
-                .send("Storage.setCookies", json!({ "cookies": cookies }))
-                .await?;
-        }
-        if let Some(origins) = state["origins"].as_array() {
-            for o in origins {
-                if let Some(ls) = o["localStorage"].as_object() {
-                    let pairs = serde_json::to_string(ls).unwrap_or_else(|_| "{}".into());
-                    let js = format!(
-                        "(function(d){{ try {{ for (const k in d) localStorage.setItem(k, d[k]); }} catch(e){{}} }})({pairs})"
-                    );
-                    let _ = self.run_js(&js).await;
-                }
-            }
-        }
-        Ok(())
-    }
+    // ── 登录态快照(storage_state)见 `src/cdp/storage.rs`(强类型 StorageState + 文件存取)──────
 
     /// 在页面执行 JS 表达式,返回结果值(`Runtime.evaluate`,自动 await Promise)。
     pub async fn run_js(&self, expression: &str) -> Result<Value> {
@@ -818,21 +782,35 @@ impl ChromiumTab {
     }
 
     /// 识别图片验证码:`<img>` 的 data:URL 直接解码、否则元素截图,再走 OCR。需 `--features ocr`。
-    /// 对齐 camoufox `Tab::ocr_image`(进程内懒加载共享模型)。
+    /// 对齐 camoufox `Tab::ocr_image`:识别走共享识别器 [`crate::ocr::set_default_ocr`] 的**热替换槽
+    /// 优先、否则懒加载默认 ddddocr**,故自训模型对本方法即时生效。
     #[cfg(feature = "ocr")]
     pub async fn ocr_image(&self, selector: &str) -> Result<String> {
-        use tokio::sync::OnceCell;
-        static OCR: OnceCell<crate::ocr::Ocr> = OnceCell::const_new();
-        let ocr = OCR.get_or_try_init(crate::ocr::Ocr::new).await?;
+        let bytes = self.ocr_image_bytes(selector).await?;
+        crate::ocr::recognize_shared(&bytes).await
+    }
+
+    /// **一步解计算题**验证码:取图(同 [`ocr_image`](Self::ocr_image))→ 识别算术式 → 求值 → 答案字符串
+    /// (如 `"8"`)。对齐 camoufox `Tab::ocr_calc`;识别不出算术式则报错。需 `--features ocr`。
+    #[cfg(feature = "ocr")]
+    pub async fn ocr_calc(&self, selector: &str) -> Result<String> {
+        let bytes = self.ocr_image_bytes(selector).await?;
+        crate::ocr::recognize_calc_shared(&bytes).await
+    }
+
+    /// 取验证码图字节:优先 `<img>` 的 `data:` URL 原图,缺失/解码失败/为空时回退元素截图。
+    #[cfg(feature = "ocr")]
+    async fn ocr_image_bytes(&self, selector: &str) -> Result<Vec<u8>> {
         let el = self.ele(selector).await?;
         let src = el.attr("src").await.ok().flatten().unwrap_or_default();
-        let bytes = if src.starts_with("data:") {
-            let b64 = src.split_once(',').map(|x| x.1).unwrap_or("");
-            crate::util::base64_decode(b64).unwrap_or_default()
-        } else {
-            el.screenshot_bytes().await?
-        };
-        ocr.recognize(&bytes)
+        match src
+            .find("base64,")
+            .and_then(|i| crate::util::base64_decode(&src[i + 7..]))
+            .filter(|b| !b.is_empty())
+        {
+            Some(b) => Ok(b),
+            None => el.screenshot_bytes().await,
+        }
     }
 
     // ── 监听 / 拦截句柄 ──────────────────────────────────────────────────

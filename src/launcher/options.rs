@@ -45,6 +45,7 @@ pub struct Proxy {
 }
 
 impl Proxy {
+    /// 新建代理配置。`server` 形如 `http://127.0.0.1:8080` 或 `socks5://host:1080`。
     pub fn new(server: impl Into<String>) -> Self {
         Self {
             server: server.into(),
@@ -54,6 +55,7 @@ impl Proxy {
         }
     }
 
+    /// 设置代理认证的用户名与密码。
     pub fn auth(mut self, user: impl Into<String>, pass: impl Into<String>) -> Self {
         self.username = Some(user.into());
         self.password = Some(pass.into());
@@ -167,20 +169,24 @@ impl Default for BrowserOptions {
 }
 
 impl BrowserOptions {
+    /// 新建默认选项(有头 + 反检测开箱即用,详见 [`Default`](BrowserOptions::default) 实现)。
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// 是否无头运行。
     pub fn headless(mut self, yes: bool) -> Self {
         self.headless = yes;
         self
     }
 
+    /// 显式指定浏览器可执行文件路径;为空则走自动下载/定位。
     pub fn binary_path(mut self, p: impl Into<PathBuf>) -> Self {
         self.binary_path = Some(p.into());
         self
     }
 
+    /// 用户数据目录(profile);为空则使用临时目录。
     pub fn user_data_dir(mut self, p: impl Into<PathBuf>) -> Self {
         self.user_data_dir = Some(p.into());
         self
@@ -192,41 +198,49 @@ impl BrowserOptions {
         self
     }
 
+    /// 默认窗口/视口大小(宽、高,像素)。
     pub fn window_size(mut self, width: u32, height: u32) -> Self {
         self.window_size = Some((width, height));
         self
     }
 
+    /// 设置代理。
     pub fn proxy(mut self, proxy: Proxy) -> Self {
         self.proxy = Some(proxy);
         self
     }
 
+    /// 覆盖 User-Agent。设置后 [`mask_ua`](BrowserOptions) 不再生效。
     pub fn user_agent(mut self, ua: impl Into<String>) -> Self {
         self.fingerprint.user_agent = Some(ua.into());
         self
     }
 
+    /// 覆盖 locale(如 `zh-CN`)。建议与出口 IP 地区一致,否则反而降低可信度。
     pub fn locale(mut self, locale: impl Into<String>) -> Self {
         self.fingerprint.locale = Some(locale.into());
         self
     }
 
+    /// 覆盖时区(IANA 名,如 `Asia/Shanghai`)。建议与出口 IP 地区一致。
     pub fn timezone(mut self, tz: impl Into<String>) -> Self {
         self.fingerprint.timezone_id = Some(tz.into());
         self
     }
 
+    /// 覆盖 `navigator.platform`。
     pub fn platform(mut self, platform: impl Into<String>) -> Self {
         self.fingerprint.platform = Some(platform.into());
         self
     }
 
+    /// 覆盖操作系统类型(影响 UA / 平台等指纹的一致性生成)。
     pub fn os(mut self, os: OsType) -> Self {
         self.fingerprint.os = Some(os);
         self
     }
 
+    /// 设置地理位置(纬度、经度)。
     pub fn geolocation(mut self, latitude: f64, longitude: f64) -> Self {
         self.fingerprint.geolocation = Some(Geolocation {
             latitude,
@@ -236,16 +250,19 @@ impl BrowserOptions {
         self
     }
 
+    /// 是否启用拟人化行为(反检测)。
     pub fn humanize(mut self, yes: bool) -> Self {
         self.humanize = yes;
         self
     }
 
+    /// 是否忽略 HTTPS 证书错误。
     pub fn ignore_https_errors(mut self, yes: bool) -> Self {
         self.ignore_https_errors = yes;
         self
     }
 
+    /// 是否绕过 CSP(便于注入脚本)。
     pub fn bypass_csp(mut self, yes: bool) -> Self {
         self.bypass_csp = yes;
         self

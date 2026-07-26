@@ -50,9 +50,6 @@ pub enum Error {
     #[error("不支持的平台: {0}")]
     UnsupportedPlatform(String),
 
-    #[error("功能尚未实现: {0}")]
-    NotImplemented(&'static str),
-
     #[error("{0}")]
     Other(String),
 }

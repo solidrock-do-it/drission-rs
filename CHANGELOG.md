@@ -5,6 +5,40 @@
 格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/),
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.5.0] - 2026-07-26
+
+> **默认后端(CDP)能力大补齐 + 滑块后端无关**:把此前只在 Camoufox 后端的登录态存取、代理池、滑块
+> 求解搬到默认的 CDP 后端,并深化每浏览器指纹、补上计算题验证码,MCP 工具面同步扩齐。
+
+### 新增 Added
+
+- **登录态 storageState 上 CDP**:`ChromiumTab` 的强类型 `storage_state` / `save_storage_state` /
+  `load_storage_state` / `apply_storage_state`(cookie 全量 + localStorage **+ sessionStorage**,对齐
+  camoufox)。见 `src/cdp/storage.rs`。
+- **滑块求解后端无关**:抽出后端无关核心 `src/slider.rs`(类型 + 页面内算法 JS + `SliderTab` trait),
+  Camoufox 与 CDP 各实现一次,**CDP 后端现在也能** `tab.slider_gap` / `solve_slider` /
+  `solve_geetest_slide` / `solve_dingxiang_slide`。`slider` feature 不再强制 camoufox。
+- **计算题验证码**:`ocr::eval_calc`(中文数字 / 全角 / 中文运算符 / 优先级 / 一元负号 / 除零保护)+
+  `Ocr::recognize_calc` + 两后端 `tab.ocr_calc`。见 `src/ocr/calc.rs`。
+- **CDP 代理池 + 健康检查**:`ProxyPool` / `ProxyHealth` / 出口地理探测从 camoufox 门解耦到两后端,
+  `ChromiumPoolOptions::proxy_pool`——每任务取**健康**代理 + **与出口地理自洽**的时区 / 语言。
+- **每浏览器指纹深化**:`CdpFingerprint` 新增 **ClientRects** / **字体枚举(measureText)** /
+  **Battery** farbling 与 **WebGPU** adapter info 伪装(跟随 WebGL 派生;同 OS 保真模式不撒谎)。
+- **drs MCP 新工具**:`browser_press`、`browser_save_state` / `browser_load_state`、`browser_ocr`、
+  `browser_solve_slider`;全局 skill 与 `docs/CLI.md` 工具清单补齐。
+- **`docs/后端能力矩阵.md`**:CDP(默认)vs Camoufox 逐条能力对照 + 选后端建议。
+
+### 变更 Changed
+
+- OCR 模型热替换(`set_default_ocr` / `tab.ocr_image`)改为**后端无关**,CDP 与 Camoufox 共用同一热替换槽。
+- `drission` 升到 0.5.0,`drission-cli` 升到 0.3.0。
+
+### 修复 Fixed
+
+- `--all-features --all-targets` 下 30 个 Camoufox 示例的 prelude 类型冲突;新增 CI「双后端并存」回归门禁。
+- CDP `ChromiumTab::ocr_image` 不再对缺失 / 坏图静默跑空字节;删除死变体 `Error::NotImplemented`;
+  修 `ocr::template_gate` 单调性单测的取样点。
+
 ## [0.4.0] - 2026-07-07
 
 > **drs 变成给 Cursor / Codex 用的浏览器采集 MCP**:当 AI 需要抓「难获取」的数据(登录态 / 反爬 /

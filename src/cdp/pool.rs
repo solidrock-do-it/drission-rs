@@ -21,6 +21,7 @@ use futures_util::stream;
 use tokio::sync::{Mutex, Semaphore};
 
 use crate::cdp::{ChromiumBrowser, ChromiumContextOverride, ChromiumOptions, ChromiumTab};
+use crate::pool::ProxyPool;
 use crate::pool::rotate::{RotateStrategy, Rotator, hash_key};
 use crate::pool::{Checkpoint, RetryPolicy, is_worker_dead};
 use crate::{Error, Result};
@@ -36,7 +37,12 @@ pub struct ChromiumPoolOptions {
     /// 可选:逐 worker 不同的启动选项;第 i 个 worker 取 `worker_options[i]`,越界用 `base_options`。
     pub worker_options: Vec<ChromiumOptions>,
     /// 出口代理池(每任务轮换;`http://host:port` / `socks5://host:1080`)。空 = 不换代理。
+    /// 简单场景用这个;要**健康剔除 + 出口地理自洽**(时区/语言随 IP)用 [`proxy_pool`](Self::proxy_pool)。
     pub proxies: Vec<String>,
+    /// 可选:带**健康检查 + 出口地理探测**的代理池([`ProxyPool`])。设置后每任务经
+    /// [`next_coherent_cdp`](ProxyPool::next_coherent_cdp) 取一个**健康**代理并附带**与其出口地理自洽**的
+    /// 时区 / 语言覆盖(坏代理自动跳过),优先级高于 [`proxies`](Self::proxies)。用前建议先 `check_health().await`。
+    pub proxy_pool: Option<ProxyPool>,
     /// UA 池(每任务轮换;经会话级 `Emulation` 覆盖)。空 = 不换 UA。
     pub user_agents: Vec<String>,
     /// 代理 / UA / worker 的轮换策略(RoundRobin / Random / Sticky)。
@@ -55,6 +61,7 @@ impl Default for ChromiumPoolOptions {
             base_options: ChromiumOptions::default(),
             worker_options: Vec::new(),
             proxies: Vec::new(),
+            proxy_pool: None,
             user_agents: Vec::new(),
             rotate: RotateStrategy::default(),
             retry: RetryPolicy::default(),
@@ -90,6 +97,11 @@ impl ChromiumPoolOptions {
     /// 设置出口代理池(每任务轮换)。
     pub fn proxies(mut self, proxies: Vec<String>) -> Self {
         self.proxies = proxies;
+        self
+    }
+    /// 设置带健康检查 + 出口地理自洽的 [`ProxyPool`](优先级高于 [`proxies`](Self::proxies))。
+    pub fn proxy_pool(mut self, pool: ProxyPool) -> Self {
+        self.proxy_pool = Some(pool);
         self
     }
     /// 设置 UA 池(每任务轮换)。
@@ -148,6 +160,7 @@ pub struct ChromiumPool {
     worker_cursor: AtomicU64,
     concurrency: usize,
     proxies: Vec<String>,
+    proxy_pool: Option<ProxyPool>,
     user_agents: Vec<String>,
     proxy_rotator: Rotator,
     ua_rotator: Rotator,
@@ -164,6 +177,7 @@ impl ChromiumPool {
             base_options,
             worker_options,
             proxies,
+            proxy_pool,
             user_agents,
             rotate,
             retry,
@@ -201,6 +215,7 @@ impl ChromiumPool {
             worker_cursor: AtomicU64::new(0),
             concurrency,
             proxies,
+            proxy_pool,
             user_agents,
             proxy_rotator: Rotator::new(rotate),
             ua_rotator: Rotator::new(rotate),
@@ -229,12 +244,19 @@ impl ChromiumPool {
         self.workers[idx as usize].clone()
     }
 
-    /// 组装一次任务用的上下文覆盖(代理 + UA 轮换)。
+    /// 组装一次任务用的上下文覆盖(代理 + UA 轮换)。有 [`ProxyPool`] 时优先用它:取**健康**代理 +
+    /// **与出口地理自洽**的时区/语言;否则退回裸 `proxies` 轮换。UA 轮换叠加在最上。
     fn build_override(&self, key: Option<&str>) -> ChromiumContextOverride {
-        let mut ov = ChromiumContextOverride::new();
-        if let Some(i) = self.proxy_rotator.pick(self.proxies.len(), key) {
-            ov = ov.proxy(self.proxies[i].clone());
-        }
+        let mut ov = if let Some(pp) = &self.proxy_pool {
+            pp.next_coherent_cdp()
+                .unwrap_or_else(ChromiumContextOverride::new)
+        } else {
+            let mut o = ChromiumContextOverride::new();
+            if let Some(i) = self.proxy_rotator.pick(self.proxies.len(), key) {
+                o = o.proxy(self.proxies[i].clone());
+            }
+            o
+        };
         if let Some(i) = self.ua_rotator.pick(self.user_agents.len(), key) {
             ov = ov.user_agent(self.user_agents[i].clone());
         }

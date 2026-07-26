@@ -1,19 +1,17 @@
-//! 通用**滑块验证码**求解:camoufox `Tab` 后端适配(薄委托层)。
+//! 通用**滑块验证码**求解:cdp `ChromiumTab` 后端适配(薄委托层)。
 //!
 //! 缺口算法 / 类型 / 配置等**后端无关核心**在 [`crate::slider`];本文件只做两件事:
-//! ① 为 camoufox [`Tab`] 实现 [`SliderTab`] 原语(跑 JS / 截图 / 点元素 / 鼠标),
-//! ② 提供与之前完全一致的公开方法(`tab.slider_gap` / `tab.solve_slider` / 极验·顶象便捷方法),
-//! 每个一行委托到核心。cdp `ChromiumTab` 侧有对称的一份(`crate::cdp::slider`)。
-//!
-//! > 反检测:建议**导航前**调用 [`Tab::apply_pointer_stealth`](crate::browser::Tab::apply_pointer_stealth)。
+//! ① 为 [`ChromiumTab`] 实现 [`SliderTab`] 原语(跑 JS / 截图 / 点元素 / 鼠标),
+//! ② 提供与 camoufox 侧完全一致的公开方法(`tab.slider_gap` / `tab.solve_slider` / 极验·顶象便捷方法),
+//! 每个一行委托到核心。这样 cdp 后端也能用整套滑块能力。
 
 use serde_json::Value;
 
-use super::Tab;
+use super::ChromiumTab;
 use crate::Result;
 use crate::slider::{SliderConfig, SliderGap, SliderResult, SliderTab};
 
-impl SliderTab for Tab {
+impl SliderTab for ChromiumTab {
     fn sl_run_js(&self, js: &str) -> impl std::future::Future<Output = Result<Value>> {
         self.run_js(js)
     }
@@ -45,7 +43,7 @@ impl SliderTab for Tab {
     }
 }
 
-impl Tab {
+impl ChromiumTab {
     /// **纯视觉**:按 [`SliderConfig`] 读图、自动选缺口算法,算出拼图需要水平移动的距离([`SliderGap`])。
     /// 要求验证图已显示。读图失败 / 无有效结果返回 `Err`。
     pub async fn slider_gap(&self, cfg: &SliderConfig) -> Result<SliderGap> {

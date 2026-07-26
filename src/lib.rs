@@ -46,8 +46,9 @@ pub mod error;
 pub mod fingerprint;
 pub mod human;
 pub mod keys;
-/// Camoufox 启动选项 / 指纹配置 / 自动下载分发。仅 `--features camoufox`。
-#[cfg(feature = "camoufox")]
+/// 启动选项 / 指纹配置 / 代理值类型;Camoufox 自动下载分发与进程启动。`options`(含后端无关的
+/// [`Proxy`](launcher::Proxy))随任一后端编译,`fetch`/`process`(真正启动 Camoufox)仅 `--features camoufox`。
+#[cfg(any(feature = "camoufox", feature = "cdp"))]
 pub mod launcher;
 pub mod locator;
 pub mod net;
@@ -66,6 +67,10 @@ pub mod scrape;
 /// HTTP Session(不开浏览器)+ 与浏览器 cookie 互通(Camoufox 后端)。仅 `--features camoufox`。
 #[cfg(feature = "camoufox")]
 pub mod session;
+/// 通用**滑块验证码**求解(后端无关核心 + [`SliderTab`](slider::SliderTab) trait,`--features slider`)。
+/// 缺口算法是页面内 JS,故 camoufox `Tab` 与 cdp `ChromiumTab` 各实现一次原语即两后端通用。
+#[cfg(feature = "slider")]
+pub mod slider;
 /// 静态(离线)元素解析(后端无关,基于 `scraper`):`StaticElement` 的 `s_ele`/`s_eles`/`table`。
 pub mod static_element;
 pub mod transport;
@@ -150,8 +155,8 @@ pub mod prelude {
     #[cfg(feature = "cdp")]
     pub use crate::cdp::{
         ConsoleData, ConsoleFilter, Cookie, CookieParam, DialogInfo, DownloadInfo, DownloadMission,
-        DownloadState, GetOptions, ImageFormat, LoadMode, PageRect, ShotOpts, WsDirection,
-        WsFilter, WsMessage,
+        DownloadState, GetOptions, ImageFormat, LoadMode, OriginStorage, PageRect, ShotOpts,
+        StorageState, WsDirection, WsFilter, WsMessage,
     };
     /// CDP「标配补齐」能力类型(对标 Playwright/Puppeteer/DP;Chromium 专有,仅 cdp 后端)。
     #[cfg(feature = "cdp")]
@@ -166,9 +171,9 @@ pub mod prelude {
     pub use crate::browser::{
         Actions, Console, ConsoleData, ConsoleFilter, Cookie, CookieParam, DialogInfo,
         DownloadInfo, DownloadMission, DownloadState, Downloads, Element, ElementRect, ElementWait,
-        Frame, GetOptions, ImageFormat, Intercept, InterceptedRequest, Listen, LoadMode, PageRect,
-        Screencast, Scroll, SetTab, ShadowRoot, ShotOpts, Tab, Wait, Window, WsDirection, WsFilter,
-        WsListener, WsMessage,
+        Frame, GetOptions, ImageFormat, Intercept, InterceptedRequest, Listen, LoadMode,
+        OriginStorage, PageRect, Screencast, Scroll, SetTab, ShadowRoot, ShotOpts, StorageState,
+        Tab, Wait, Window, WsDirection, WsFilter, WsListener, WsMessage,
     };
     #[cfg(all(feature = "camoufox", not(feature = "cdp")))]
     pub use crate::launcher::BrowserOptions;
@@ -206,19 +211,14 @@ pub mod prelude {
     // ── Camoufox 后端独有能力(不与 cdp 冲突的类型,始终随 camoufox)─
     #[cfg(feature = "camoufox")]
     pub use crate::browser::{
-        BrowserServer, ConsoleSteps, ContextOverride, ListenStream, MouseButton, OriginStorage,
-        ScreencastMode, StorageState, WsSocket, WsSteps,
+        BrowserServer, ConsoleSteps, ContextOverride, ListenStream, MouseButton, ScreencastMode,
+        WsSocket, WsSteps,
     };
     // ── 通用吐环境(envkit;值类型后端无关,Dumper/Probe 按后端 canonical)──
     #[cfg(all(feature = "camoufox", not(feature = "cdp")))]
     pub use crate::browser::{EnvDumper, EnvProbe};
     #[cfg(feature = "camoufox")]
     pub use crate::browser::{EnvDumper as CamoufoxEnvDumper, EnvProbe as CamoufoxEnvProbe};
-    /// 滑块/缺口识别类型(`--features slider`,自动带入 camoufox)。
-    #[cfg(feature = "slider")]
-    pub use crate::browser::{
-        GapMethod, ImageSource, SliderConfig, SliderGap, SliderResult, SuccessCheck,
-    };
     /// 吐环境构建器/句柄 canonical:cdp 在场为 cdp,否则 camoufox;另一后端用 `Camoufox*`/`Chromium*`。
     #[cfg(feature = "cdp")]
     pub use crate::cdp::{
@@ -228,19 +228,26 @@ pub mod prelude {
     /// 吐环境值类型(后端无关,camoufox / cdp 共用)。
     #[cfg(any(feature = "camoufox", feature = "cdp"))]
     pub use crate::envkit::{EnvDump, EnvScope, EnvTarget};
+    /// 代理值类型 + 代理池 / 健康探测(后端无关:camoufox `BrowserPool` 与 cdp `ChromiumPool` 都用)。
+    #[cfg(any(feature = "camoufox", feature = "cdp"))]
+    pub use crate::launcher::Proxy;
     #[cfg(feature = "camoufox")]
-    pub use crate::launcher::{Fingerprint, Geolocation, OsType, Proxy};
+    pub use crate::launcher::{Fingerprint, Geolocation, OsType};
     #[cfg(feature = "camoufox")]
-    pub use crate::pool::{
-        BrowserPool, FingerprintPool, FingerprintProfile, PoolOptions, ProxyGeo, ProxyHealth,
-        ProxyPool,
-    };
+    pub use crate::pool::{BrowserPool, FingerprintPool, FingerprintProfile, PoolOptions};
     /// 后端无关并发原语(camoufox `BrowserPool` / cdp `ChromiumPool` 共用)。
     #[cfg(any(feature = "camoufox", feature = "cdp"))]
     pub use crate::pool::{Checkpoint, RetryPolicy, RotateStrategy};
+    #[cfg(any(feature = "camoufox", feature = "cdp"))]
+    pub use crate::pool::{ProxyGeo, ProxyHealth, ProxyPool};
     #[cfg(feature = "camoufox")]
     pub use crate::session::{
         BrowserProfile, PostData, ReplayBuilder, SessionOptions, SessionPage,
+    };
+    /// 滑块/缺口识别类型 + 后端原语 trait(`--features slider`,**后端无关**,camoufox / cdp 均可用)。
+    #[cfg(feature = "slider")]
+    pub use crate::slider::{
+        GapMethod, ImageSource, SliderConfig, SliderGap, SliderResult, SliderTab, SuccessCheck,
     };
     #[cfg(feature = "camoufox")]
     pub use crate::web_page::{PageMode, WebPage};

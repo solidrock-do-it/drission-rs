@@ -17,19 +17,21 @@ pub mod rotate;
 pub use checkpoint::Checkpoint;
 pub use rotate::RotateStrategy;
 
-// 代理池 / 指纹池 / 健康探测依赖 camoufox 的 `ContextOverride`/`Proxy`,仅 camoufox 编译。
+// 指纹池依赖 camoufox 的 `ContextOverride`,仅 camoufox 编译(CDP 用 `CdpFingerprintPool`)。
 #[cfg(feature = "camoufox")]
 pub mod fingerprint;
-#[cfg(feature = "camoufox")]
+// 代理池 + 健康探测:核心(轮换 / 探活 / 出口地理)后端无关,两后端都编;
+// geo→上下文覆盖按后端各有一版(camoufox `ContextOverride` / cdp `ChromiumContextOverride`)。
+#[cfg(any(feature = "camoufox", feature = "cdp"))]
 pub mod health;
-#[cfg(feature = "camoufox")]
+#[cfg(any(feature = "camoufox", feature = "cdp"))]
 pub mod proxy_pool;
 
 #[cfg(feature = "camoufox")]
 pub use fingerprint::{FingerprintPool, FingerprintProfile};
-#[cfg(feature = "camoufox")]
+#[cfg(any(feature = "camoufox", feature = "cdp"))]
 pub use health::{ProxyGeo, ProxyHealth, locale_for_country};
-#[cfg(feature = "camoufox")]
+#[cfg(any(feature = "camoufox", feature = "cdp"))]
 pub use proxy_pool::ProxyPool;
 
 use std::time::Duration;

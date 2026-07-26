@@ -51,8 +51,12 @@ pub use listener::{DataPacket, ListenFilter, RequestData, ResponseData};
 pub use screencast::{Screencast, ScreencastMode};
 pub use serve::BrowserServer;
 pub use shadow::ShadowRoot;
+// 滑块类型已上移为后端无关的 crate 顶层模块 `crate::slider`;此处再导出保持
+// `crate::browser::{SliderConfig, …}` 老路径兼容(本模块 `slider` 子模块只含 camoufox 适配 impl)。
 #[cfg(feature = "slider")]
-pub use slider::{GapMethod, ImageSource, SliderConfig, SliderGap, SliderResult, SuccessCheck};
+pub use crate::slider::{
+    GapMethod, ImageSource, SliderConfig, SliderGap, SliderResult, SliderTab, SuccessCheck,
+};
 pub use storage::{OriginStorage, StorageState};
 pub use tab::{
     ContextOverride, Cookie, CookieParam, DialogInfo, DownloadInfo, GetOptions, ImageFormat,

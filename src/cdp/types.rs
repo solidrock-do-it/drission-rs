@@ -222,3 +222,79 @@ impl CookieParam {
         self
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn load_mode_maps_to_cdp_wait_event() {
+        assert_eq!(LoadMode::Normal.cdp_event(), Some("Page.loadEventFired"));
+        assert_eq!(
+            LoadMode::Eager.cdp_event(),
+            Some("Page.domContentEventFired")
+        );
+        assert_eq!(LoadMode::None.cdp_event(), None);
+        assert_eq!(LoadMode::default(), LoadMode::Normal);
+    }
+
+    #[test]
+    fn image_format_maps_to_cdp_format() {
+        assert_eq!(ImageFormat::Png.cdp_format(), "png");
+        assert_eq!(ImageFormat::Jpeg.cdp_format(), "jpeg");
+        assert_eq!(ImageFormat::default(), ImageFormat::Png);
+    }
+
+    #[test]
+    fn get_options_builder_sets_fields() {
+        let o = GetOptions::new()
+            .retry(3)
+            .interval(2.5)
+            .timeout(Duration::from_secs(9))
+            .load_mode(LoadMode::Eager)
+            .referer("https://ref.example");
+        assert_eq!(o.retry, 3);
+        assert_eq!(o.interval, Duration::from_secs_f64(2.5));
+        assert_eq!(o.timeout, Some(Duration::from_secs(9)));
+        assert_eq!(o.load_mode, Some(LoadMode::Eager));
+        assert_eq!(o.referer.as_deref(), Some("https://ref.example"));
+    }
+
+    #[test]
+    fn get_options_default_and_negative_interval_clamps() {
+        let d = GetOptions::default();
+        assert_eq!(d.retry, 0);
+        assert_eq!(d.interval, Duration::from_secs(1));
+        assert!(d.timeout.is_none() && d.load_mode.is_none() && d.referer.is_none());
+        // 负间隔被夹到 0,不会 panic 于 Duration::from_secs_f64。
+        assert_eq!(GetOptions::new().interval(-5.0).interval, Duration::ZERO);
+    }
+
+    #[test]
+    fn shot_opts_builder_sets_fields() {
+        let s = ShotOpts::new()
+            .full_page(true)
+            .format(ImageFormat::Jpeg)
+            .quality(80);
+        assert!(s.full_page);
+        assert_eq!(s.format, ImageFormat::Jpeg);
+        assert_eq!(s.quality, Some(80));
+        assert!(s.region.is_none());
+
+        let r = ShotOpts::new().region((1.0, 2.0), (3.0, 4.0));
+        assert_eq!(r.region, Some(((1.0, 2.0), (3.0, 4.0))));
+    }
+
+    #[test]
+    fn cookie_param_builder_sets_identity_fields() {
+        let c = CookieParam::new("sid", "abc")
+            .url("https://x.example")
+            .domain(".example.com");
+        assert_eq!(c.name, "sid");
+        assert_eq!(c.value, "abc");
+        assert_eq!(c.url.as_deref(), Some("https://x.example"));
+        assert_eq!(c.domain.as_deref(), Some(".example.com"));
+        // 未设置的可选字段保持 None。
+        assert!(c.path.is_none() && c.secure.is_none() && c.expires.is_none());
+    }
+}

@@ -12,6 +12,7 @@ use std::time::{Duration, Instant};
 
 use serde_json::Value;
 
+#[cfg(feature = "camoufox")]
 use crate::browser::ContextOverride;
 use crate::launcher::Proxy;
 
@@ -44,7 +45,8 @@ impl ProxyGeo {
         }
     }
 
-    /// 据此地理生成**自洽**的上下文覆盖(时区 + 定位 + 语言),用于 `Browser::new_tab_with`。
+    /// 据此地理生成**自洽**的上下文覆盖(时区 + 定位 + 语言),用于 camoufox `Browser::new_tab_with`。
+    #[cfg(feature = "camoufox")]
     pub fn coherent_override(&self) -> ContextOverride {
         let mut ov = ContextOverride::new();
         if let Some(tz) = &self.timezone {
@@ -52,6 +54,20 @@ impl ProxyGeo {
         }
         if let (Some(lat), Some(lon)) = (self.latitude, self.longitude) {
             ov = ov.geolocation(lat, lon);
+        }
+        if let Some(loc) = self.country_code.as_deref().and_then(locale_for_country) {
+            ov = ov.locale(loc);
+        }
+        ov
+    }
+
+    /// CDP 版:据此地理生成自洽的 [`ChromiumContextOverride`](crate::cdp::ChromiumContextOverride)
+    /// (时区 + 语言;CDP 上下文覆盖不含定位),用于 `ChromiumPoolOptions::proxy_pool`。
+    #[cfg(feature = "cdp")]
+    pub fn coherent_cdp_override(&self) -> crate::cdp::ChromiumContextOverride {
+        let mut ov = crate::cdp::ChromiumContextOverride::new();
+        if let Some(tz) = &self.timezone {
+            ov = ov.timezone(tz.clone());
         }
         if let Some(loc) = self.country_code.as_deref().and_then(locale_for_country) {
             ov = ov.locale(loc);
@@ -208,19 +224,31 @@ mod tests {
         assert_eq!(g.longitude, Some(-74.0));
     }
 
-    #[test]
-    fn coherent_override_from_geo() {
-        let g = ProxyGeo {
+    fn tokyo_geo() -> ProxyGeo {
+        ProxyGeo {
             ip: Some("1.2.3.4".into()),
             country_code: Some("JP".into()),
             timezone: Some("Asia/Tokyo".into()),
             latitude: Some(35.68),
             longitude: Some(139.69),
-        };
-        let ov = g.coherent_override();
+        }
+    }
+
+    #[cfg(feature = "camoufox")]
+    #[test]
+    fn coherent_override_from_geo() {
+        let ov = tokyo_geo().coherent_override();
         assert_eq!(ov.timezone_id.as_deref(), Some("Asia/Tokyo"));
         assert_eq!(ov.locale.as_deref(), Some("ja-JP"));
         assert!(ov.geolocation.is_some());
+    }
+
+    #[cfg(feature = "cdp")]
+    #[test]
+    fn coherent_cdp_override_from_geo() {
+        let ov = tokyo_geo().coherent_cdp_override();
+        assert_eq!(ov.timezone.as_deref(), Some("Asia/Tokyo"));
+        assert_eq!(ov.locale.as_deref(), Some("ja-JP"));
     }
 
     #[test]

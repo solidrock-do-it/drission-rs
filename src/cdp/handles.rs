@@ -289,3 +289,39 @@ pub(crate) fn cookie_param_json(c: &CookieParam) -> Value {
     }
     o
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cookie_param_json_minimal_only_name_value() {
+        let j = cookie_param_json(&CookieParam::new("sid", "abc"));
+        assert_eq!(j["name"], "sid");
+        assert_eq!(j["value"], "abc");
+        // 未设置的可选字段不出现在 JSON 里(CDP 侧靠缺省)。
+        let obj = j.as_object().unwrap();
+        assert!(!obj.contains_key("url"));
+        assert!(!obj.contains_key("domain"));
+        assert!(!obj.contains_key("secure"));
+        assert!(!obj.contains_key("httpOnly"));
+        assert!(!obj.contains_key("expires"));
+    }
+
+    #[test]
+    fn cookie_param_json_includes_set_fields_with_cdp_camelcase() {
+        let mut c = CookieParam::new("sid", "abc").domain(".example.com");
+        c.path = Some("/app".into());
+        c.secure = Some(true);
+        c.http_only = Some(true);
+        c.expires = Some(1_700_000_000.0);
+        let j = cookie_param_json(&c);
+        assert_eq!(j["domain"], ".example.com");
+        assert_eq!(j["path"], "/app");
+        assert_eq!(j["secure"], true);
+        // http_only 序列化成 CDP 的 camelCase httpOnly。
+        assert_eq!(j["httpOnly"], true);
+        assert!(!j.as_object().unwrap().contains_key("http_only"));
+        assert_eq!(j["expires"], 1_700_000_000.0);
+    }
+}

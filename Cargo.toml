@@ -1,6 +1,6 @@
 [package]
 name = "drission"
-version = "0.4.0"
+version = "0.5.0"
 edition = "2024"
 rust-version = "1.85"
 # 示例按能力分文件夹(examples/<分类>/),每个 [[example]] 显式声明 path;关掉自动发现(子目录无
@@ -47,8 +47,9 @@ cdp = []
 # Camoufox / Firefox(Juggler)反检测后端 + 全部高层能力(Page/WebPage/Session/Pool/吐环境/过盾…)。
 # opt-in,真正 gate:不开 camoufox 则 browser/launcher/page/web_page/session/pool 都不编译。
 camoufox = []
-# 滑块/图片缺口距离识别(通用滑块 + 极验 + 顶象 ContentNcc)。基于 Camoufox Tab,故自动带入 camoufox。
-slider = ["camoufox"]
+# 滑块/图片缺口距离识别(通用滑块 + 极验 + 顶象 ContentNcc)。**后端无关**:缺口算法是页面内 JS,
+# 核心在 crate::slider,camoufox `Tab` 与 cdp `ChromiumTab` 各实现一次原语即两后端均可用(不再强制 camoufox)。
+slider = []
 # 验证码 OCR(ddddocr 预训练模型 + 纯 Rust tract 推理)。Ocr 识别器后端无关;
 # tab.ocr_image 便捷方法需 camoufox。可选,避免给不需要的用户引入重依赖。
 ocr = ["dep:image", "dep:tract-onnx", "dep:fontdue"]
@@ -108,7 +109,7 @@ sha2 = "0.10"
 # 运行各示例(头注释里也都写了对应命令,复制即用):
 #   cdp 示例:          cargo run --example cdp_demo                                   (默认即含 cdp)
 #   Camoufox 系示例:   cargo run --example quickstart --no-default-features --features camoufox
-#   滑块(slider):     cargo run --example geetest_slide --no-default-features --features slider
+#   滑块(slider,camoufox):cargo run --example geetest_slide --no-default-features --features camoufox,slider
 #   Camoufox+OCR:      cargo run --example ocr_captcha --no-default-features --features camoufox,ocr
 #   cdp+OCR(点选):    cargo run --example yidun_click --features cdp,ocr
 #   cdp+OCR(点选稳定):cargo run --example yidun_click_stable --features cdp,ocr
@@ -375,21 +376,22 @@ path = "examples/clickword/yidun_detect.rs"
 required-features = ["cdp"]
 
 # ═════════ 验证码·滑块/缺口(examples/slider/)═════════
-# 滑块/缺口识别示例(slider 自动带入 camoufox)。
+# 滑块/缺口识别示例(这些示例用 Camoufox `Browser`/`Tab`,故显式声明 camoufox+slider;
+# 滑块能力本身后端无关,cdp `ChromiumTab` 上也有同名 tab.slider_gap/solve_slider)。
 [[example]]
 name = "dx_slide"
 path = "examples/slider/dx_slide.rs"
-required-features = ["slider"]
+required-features = ["camoufox", "slider"]
 
 [[example]]
 name = "geetest_slide"
 path = "examples/slider/geetest_slide.rs"
-required-features = ["slider"]
+required-features = ["camoufox", "slider"]
 
 [[example]]
 name = "slider_local"
 path = "examples/slider/slider_local.rs"
-required-features = ["slider"]
+required-features = ["camoufox", "slider"]
 
 # 验证码·字符 OCR(Camoufox 后端 tab.ocr_image,需 camoufox + ocr;归 examples/ocr/)。
 [[example]]

@@ -475,10 +475,47 @@ __BODY__
 })();"#;
 
 /// WebGL `getParameter` hook:仅当传入对应字符串(非空)时改 vendor(37445)/renderer(37446)。
+/// 同时把 **WebGPU** adapter info(`requestAdapterInfo`)的 vendor/architecture 伪装成与 WebGL 一致,
+/// 避免跨 API 露馅(同 OS 保真模式不设 WebGL,故也不动 WebGPU)。
 fn webgl_js(vendor: &str, renderer: &str) -> String {
+    let (gpu_vendor, gpu_arch) = webgpu_hint(vendor, renderer);
     WEBGL_JS_TEMPLATE
         .replace("__VENDOR__", &json_str(vendor))
         .replace("__RENDERER__", &json_str(renderer))
+        .replace("__GPUVENDOR__", &json_str(&gpu_vendor))
+        .replace("__GPUARCH__", &json_str(&gpu_arch))
+}
+
+/// 从 WebGL renderer 串猜 WebGPU 的 `vendor`/`architecture`(尽力而为;猜不出返回空 → 不伪装 WebGPU)。
+fn webgpu_hint(vendor: &str, renderer: &str) -> (String, String) {
+    let r = renderer.to_ascii_lowercase();
+    let v = if r.contains("nvidia") {
+        "nvidia"
+    } else if r.contains("amd") || r.contains("radeon") {
+        "amd"
+    } else if r.contains("intel") {
+        "intel"
+    } else if r.contains("apple") || vendor.to_ascii_lowercase().contains("apple") {
+        "apple"
+    } else {
+        ""
+    };
+    let arch = if r.contains("rtx 40") || r.contains("rtx40") {
+        "ada"
+    } else if r.contains("rtx 30") || r.contains("rtx30") {
+        "ampere"
+    } else if r.contains("rtx 20") || r.contains("rtx20") || r.contains("gtx 16") {
+        "turing"
+    } else if v == "apple" {
+        "metal-3"
+    } else if v == "intel" {
+        "gen-12lp"
+    } else if v == "amd" {
+        "rdna2"
+    } else {
+        ""
+    };
+    (v.to_string(), arch.to_string())
 }
 
 const WEBGL_JS_TEMPLATE: &str = r#"  try{
@@ -489,16 +526,28 @@ const WEBGL_JS_TEMPLATE: &str = r#"  try{
     };
     if(window.WebGLRenderingContext) patch(WebGLRenderingContext.prototype);
     if(window.WebGL2RenderingContext) patch(WebGL2RenderingContext.prototype);
+    var __gv=__GPUVENDOR__, __ga=__GPUARCH__;
+    if(__gv&&window.GPUAdapter&&GPUAdapter.prototype.requestAdapterInfo&&!GPUAdapter.prototype.requestAdapterInfo.__df){
+      var __ri=GPUAdapter.prototype.requestAdapterInfo;
+      var __nri=function(){ return __ri.apply(this,arguments).then(function(x){ try{ return {vendor:__gv, architecture:__ga, device:'', description:(x&&x.description)||''}; }catch(e){ return x; } }); };
+      __nri.__df=true; try{ GPUAdapter.prototype.requestAdapterInfo=__nri; }catch(e){}
+    }
   }catch(e){}
 "#;
 
-/// canvas / audio 微噪声(每画像确定性:每次取数前把 PRNG 重置到 base 种子,故指纹跨调用稳定、跨画像各异)。
+/// 每画像确定性微噪声/归一(每次取数前把 PRNG 重置到 base 种子,故指纹跨调用稳定、跨画像各异)。
+/// 覆盖:**canvas**(getImageData/toDataURL)、**audio**(AnalyserNode)、**ClientRects**
+/// (getBoundingClientRect 微缩放)、**字体枚举**(measureText().width 微缩放)、**Battery**(归一到满电)。
 fn noise_js(seed: u32) -> String {
-    NOISE_JS_TEMPLATE.replace("__SEED__", &seed.to_string())
+    // 几何/字体缩放因子:极接近 1(±5e-5),每画像确定性、跨画像各异,不影响布局但足以打散关联指纹。
+    let crf = 1.0 + (((seed % 4000) as f64) - 2000.0) / 4.0e7;
+    NOISE_JS_TEMPLATE
+        .replace("__SEED__", &seed.to_string())
+        .replace("__CRF__", &format!("{crf}"))
 }
 
 const NOISE_JS_TEMPLATE: &str = r#"  try{
-    var __base=(__SEED__)>>>0; var __s=__base;
+    var __base=(__SEED__)>>>0; var __s=__base; var __crf=(__CRF__);
     var __rnd=function(){ __s=(__s+0x6D2B79F5)>>>0; var t=__s; t=Math.imul(t^(t>>>15),t|1); t^=t+Math.imul(t^(t>>>7),t|61); return ((t^(t>>>14))>>>0)/4294967296; };
     var CRC=window.CanvasRenderingContext2D&&CanvasRenderingContext2D.prototype;
     var HCE=window.HTMLCanvasElement&&HTMLCanvasElement.prototype;
@@ -513,12 +562,27 @@ const NOISE_JS_TEMPLATE: &str = r#"  try{
         var ntd=function(){ try{ var c=this.getContext('2d'); if(c){ var w=this.width,h=this.height; if(w&&h){ __s=__base; var im=gid.call(c,0,0,w,h); var dd=im.data; for(var i=0;i<dd.length;i+=4){ if(__rnd()<0.02){ dd[i]=dd[i]^1; } } c.putImageData(im,0,0); } } }catch(e){} return td.apply(this,arguments); };
         ntd.__df=true; try{ HCE.toDataURL=ntd; }catch(e){}
       }
+      var mt=CRC.measureText;
+      if(mt&&!mt.__df){
+        var nmt=function(t){ var m=mt.call(this,t); try{ return new Proxy(m,{get:function(o,p){ return p==='width'? o.width*__crf : o[p]; }}); }catch(e){ return m; } };
+        nmt.__df=true; try{ CRC.measureText=nmt; }catch(e){}
+      }
     }
     var AN=window.AnalyserNode&&AnalyserNode.prototype;
     if(AN&&AN.getFloatFrequencyData&&!AN.getFloatFrequencyData.__df){
       var gf=AN.getFloatFrequencyData;
       var ngf=function(a){ gf.call(this,a); try{ __s=__base; for(var i=0;i<a.length;i++){ a[i]=a[i]+(__rnd()-0.5)*0.1; } }catch(e){} };
       ngf.__df=true; try{ AN.getFloatFrequencyData=ngf; }catch(e){}
+    }
+    var EP=window.Element&&Element.prototype;
+    if(EP&&EP.getBoundingClientRect&&!EP.getBoundingClientRect.__df){
+      var gbcr=EP.getBoundingClientRect;
+      var ngbcr=function(){ var r=gbcr.apply(this,arguments); try{ if(r&&typeof r.width==='number'&&window.DOMRect){ return new DOMRect(r.x*__crf, r.y*__crf, r.width*__crf, r.height*__crf); } }catch(e){} return r; };
+      ngbcr.__df=true; try{ EP.getBoundingClientRect=ngbcr; }catch(e){}
+    }
+    if(navigator.getBattery&&!navigator.getBattery.__df){
+      var __bat={charging:true,chargingTime:0,dischargingTime:Infinity,level:1,addEventListener:function(){},removeEventListener:function(){},dispatchEvent:function(){return true;},onchargingchange:null,onlevelchange:null};
+      var gb=function(){ return Promise.resolve(__bat); }; gb.__df=true; try{ navigator.getBattery=gb; }catch(e){}
     }
   }catch(e){}
 "#;
@@ -569,8 +633,37 @@ mod tests {
         assert!(js.contains("deviceMemory") && js.contains("16"));
         assert!(js.contains("37445") && js.contains("NVIDIA"));
         assert!(js.contains("12345") && js.contains("getImageData"));
+        // 深化的指纹面:字体宽度 / ClientRects / Battery / WebGPU 都应注入。
+        assert!(js.contains("measureText"), "应 farble measureText 宽度");
+        assert!(
+            js.contains("getBoundingClientRect"),
+            "应 farble ClientRects"
+        );
+        assert!(js.contains("getBattery"), "应归一 Battery");
+        assert!(
+            js.contains("requestAdapterInfo") && js.contains("nvidia"),
+            "应把 WebGPU adapter 伪装成与 WebGL 一致(NVIDIA→nvidia)"
+        );
         // 必须是单一 IIFE,语法上自洽(括号配平的粗校验)。
         assert!(js.starts_with("(function()"));
+    }
+
+    #[test]
+    fn webgpu_hint_derives_from_webgl_renderer() {
+        assert_eq!(
+            webgpu_hint("Google Inc. (NVIDIA)", "ANGLE (NVIDIA, RTX 3060)"),
+            ("nvidia".into(), "ampere".into())
+        );
+        assert_eq!(
+            webgpu_hint("Google Inc. (Intel)", "ANGLE (Intel, UHD 630)").0,
+            "intel"
+        );
+        assert_eq!(webgpu_hint("Apple", "Apple M4").0, "apple");
+        // 猜不出厂商 → 空,调用方据此不伪装 WebGPU。
+        assert_eq!(
+            webgpu_hint("", "SwiftShader"),
+            (String::new(), String::new())
+        );
     }
 
     #[test]

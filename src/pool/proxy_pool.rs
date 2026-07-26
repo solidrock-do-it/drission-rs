@@ -8,6 +8,7 @@
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+#[cfg(feature = "camoufox")]
 use crate::browser::ContextOverride;
 use crate::launcher::Proxy;
 
@@ -126,18 +127,38 @@ impl ProxyPool {
     /// 直接喂给 [`Browser::new_tab_with`](crate::browser::Browser::new_tab_with)。空池返回 `None`。
     ///
     /// 这是"住宅代理轮换 + 反检测一致性"的一把梭:每个标签都拿到自洽的 IP+指纹。
+    #[cfg(feature = "camoufox")]
     pub fn next_coherent(&self) -> Option<ContextOverride> {
         let p = self.next_healthy()?;
         Some(self.coherent_override_for(&p))
     }
 
     /// 据某代理已探测到的出口地理,生成自洽的上下文覆盖(含该代理本身);未探测到地理则仅含代理。
+    #[cfg(feature = "camoufox")]
     pub fn coherent_override_for(&self, proxy: &Proxy) -> ContextOverride {
         let geo = self
             .index_of(&proxy.server)
             .and_then(|i| self.health.lock().ok().map(|g| g[i].geo.clone()))
             .unwrap_or_default();
         geo.coherent_override().proxy(proxy.clone())
+    }
+
+    /// CDP 版:取一个健康代理 + **与其出口地理自洽**的 [`ChromiumContextOverride`](crate::cdp::ChromiumContextOverride)
+    /// (时区/语言 + 该代理),直接喂给 CDP 池。空池返回 `None`。
+    #[cfg(feature = "cdp")]
+    pub fn next_coherent_cdp(&self) -> Option<crate::cdp::ChromiumContextOverride> {
+        let p = self.next_healthy()?;
+        Some(self.cdp_override_for(&p))
+    }
+
+    /// CDP 版:据某代理已探测到的出口地理,生成自洽的 CDP 上下文覆盖(含该代理);未探测到则仅含代理。
+    #[cfg(feature = "cdp")]
+    pub fn cdp_override_for(&self, proxy: &Proxy) -> crate::cdp::ChromiumContextOverride {
+        let geo = self
+            .index_of(&proxy.server)
+            .and_then(|i| self.health.lock().ok().map(|g| g[i].geo.clone()))
+            .unwrap_or_default();
+        geo.coherent_cdp_override().proxy(proxy.server.clone())
     }
 
     /// 把某代理(按 `server` 匹配)标记为不健康——失败后据此轮换走它。
@@ -262,6 +283,7 @@ mod tests {
         assert!(p.next_healthy().is_some());
     }
 
+    #[cfg(feature = "camoufox")]
     #[test]
     fn coherent_override_includes_proxy() {
         let p = pool();
@@ -273,6 +295,16 @@ mod tests {
         );
         // 未探测地理:无时区覆盖。
         assert!(ov.timezone_id.is_none());
+    }
+
+    #[cfg(feature = "cdp")]
+    #[test]
+    fn cdp_override_includes_proxy() {
+        let p = pool();
+        let ov = p.cdp_override_for(&Proxy::new("http://b:2"));
+        assert_eq!(ov.proxy.as_deref(), Some("http://b:2"));
+        // 未探测地理:无时区覆盖。
+        assert!(ov.timezone.is_none());
     }
 
     #[test]

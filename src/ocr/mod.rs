@@ -8,8 +8,10 @@
 //!   指定本地路径、`DRISSION_OCR_MODEL_URL` 换下载源);字符集 8210 字内置于库。
 //! - 核心(后端无关):[`Ocr::new`](Ocr::new)(异步,确保模型就绪)→ [`Ocr::recognize`](Ocr::recognize)
 //!   (同步,传 PNG/JPEG 字节 → 文本)。
-//! - 便捷(**Camoufox 后端**,`--features camoufox`):`Tab::ocr_image`(定位元素 → 取图
-//!   (`<img>` data:URL 直接解码,否则元素截图)→ 识别)。
+//! - 便捷(**两后端**,`--features cdp,ocr` 或 `--features camoufox,ocr`):`Tab::ocr_image`
+//!   (定位元素 → 取图(`<img>` data:URL 直接解码,否则元素截图)→ 识别)。camoufox 的
+//!   [`Tab::ocr_image`](Ocr) 与 cdp 的 `ChromiumTab::ocr_image` 都走共享识别器,故
+//!   [`set_default_ocr`](自训模型热替换)对两后端即时生效。
 //!
 //! ```no_run
 //! # async fn f() -> drission::Result<()> {
@@ -33,7 +35,9 @@ use crate::browser::Tab;
 use crate::util::base64_decode;
 use crate::{Error, Result};
 
+mod calc;
 mod glyph;
+pub use calc::{calc_answer_string, eval_calc};
 pub use glyph::{GlyphMatcher, SampleBank};
 
 /// 内置 ddddocr 字符集(beta `common.json`,8210 字;首项 "" = CTC blank)。
@@ -137,6 +141,15 @@ impl Ocr {
         let t = out[0].clone().into_tensor();
         let view = t.to_plain_array_view::<f32>().map_err(terr)?;
         Ok(ctc_decode(&view, &self.charset))
+    }
+
+    /// 识别一张**计算题**验证码图并求值,返回答案字符串(如 `"8"`)。先 [`recognize`](Self::recognize)
+    /// 出算术式文本,再用 [`eval_calc`] 解析求值([`calc_answer_string`] 格式化)。识别不出算术式则报错。
+    pub fn recognize_calc(&self, image: &[u8]) -> Result<String> {
+        let text = self.recognize(image)?;
+        eval_calc(&text)
+            .map(calc_answer_string)
+            .ok_or_else(|| Error::msg(format!("计算题:OCR 文本无法解析为算术式: {text:?}")))
     }
 
     /// **受约束识别**:给一张(单字)图,返回它是 `chars` 里**每个候选字**的亲和度(0–1,各时间步
@@ -1202,36 +1215,61 @@ async fn ensure_model() -> Result<PathBuf> {
     Ok(path)
 }
 
-/// 进程内共享的默认 OCR 实例(懒加载,首次触发下载 + 建模)。
-#[cfg(feature = "camoufox")]
+/// 进程内共享的默认 OCR 实例(懒加载,首次触发下载 + 建模)。**后端无关**(camoufox / cdp 共用)。
+#[cfg(any(feature = "camoufox", feature = "cdp"))]
 static DEFAULT_OCR: tokio::sync::OnceCell<Ocr> = tokio::sync::OnceCell::const_new();
 
 /// `tab.ocr_image` 的**热替换槽**:一旦设置,优先于懒加载的默认实例(全局即时生效,无需重启)。
-#[cfg(feature = "camoufox")]
+/// **后端无关**——camoufox 与 cdp 的 `tab.ocr_image` 都读同一个槽。
+#[cfg(any(feature = "camoufox", feature = "cdp"))]
 static OCR_OVERRIDE: tokio::sync::RwLock<Option<std::sync::Arc<Ocr>>> =
     tokio::sync::RwLock::const_new(None);
 
 /// **热替换** `tab.ocr_image` 用的进程级识别器:传入自训 [`Ocr`](自定义模型 + 字符集)即全局生效,
-/// 之后所有 `tab.ocr_image` 都走它,无需重启进程。传入前用 [`Ocr::from_files`] / [`Ocr::from_model_path_with_charset`] 构造。
-#[cfg(feature = "camoufox")]
+/// 之后所有后端的 `tab.ocr_image` 都走它,无需重启进程。**后端无关**(camoufox / cdp 均生效)。
+/// 传入前用 [`Ocr::from_files`] / [`Ocr::from_model_path_with_charset`] 构造。
+#[cfg(any(feature = "camoufox", feature = "cdp"))]
 pub async fn set_default_ocr(ocr: Ocr) {
     *OCR_OVERRIDE.write().await = Some(std::sync::Arc::new(ocr));
+}
+
+/// 用共享识别器识别一张图字节:优先热替换槽里的自训模型([`set_default_ocr`]),否则懒加载默认
+/// ddddocr 模型。**后端无关**,供各后端 `tab.ocr_image` 复用,保证热替换在 camoufox / cdp 上行为一致。
+#[cfg(any(feature = "camoufox", feature = "cdp"))]
+pub(crate) async fn recognize_shared(bytes: &[u8]) -> Result<String> {
+    if let Some(ocr) = OCR_OVERRIDE.read().await.clone() {
+        return ocr.recognize(bytes);
+    }
+    let ocr = DEFAULT_OCR.get_or_try_init(Ocr::new).await?;
+    ocr.recognize(bytes)
+}
+
+/// 用共享识别器识别一张**计算题**图并求值,返回答案字符串。后端无关,供各后端 `tab.ocr_calc` 复用。
+#[cfg(any(feature = "camoufox", feature = "cdp"))]
+pub(crate) async fn recognize_calc_shared(bytes: &[u8]) -> Result<String> {
+    let text = recognize_shared(bytes).await?;
+    calc::eval_calc(&text)
+        .map(calc::calc_answer_string)
+        .ok_or_else(|| Error::msg(format!("计算题:OCR 文本无法解析为算术式: {text:?}")))
 }
 
 /// `Tab::ocr_image` 便捷方法(需 Camoufox 后端的 [`Tab`])。
 #[cfg(feature = "camoufox")]
 impl Tab {
     /// **一步识别**页面里某元素的验证码图:定位 `selector`(`css:`/`xpath:` 前缀,同 [`Tab::ele`])→
-    /// 取图(`<img>` 的 `data:` URL 直接解码,否则元素截图)→ ddddocr 模型识别 → 文本。
+    /// 取图(`<img>` 的 `data:` URL 直接解码,否则元素截图)→ 识别 → 文本。识别走共享的
+    /// [`recognize_shared`](热替换优先),故 [`set_default_ocr`] 对本方法即时生效。
     /// 首次调用会懒加载默认模型(可能下载 ~54MB)。
     pub async fn ocr_image(&self, selector: &str) -> Result<String> {
         let bytes = self.fetch_image_bytes(selector).await?;
-        // 优先用热替换槽里的自训模型(若设过 set_default_ocr),否则懒加载默认 ddddocr 模型。
-        if let Some(ocr) = OCR_OVERRIDE.read().await.clone() {
-            return ocr.recognize(&bytes);
-        }
-        let ocr = DEFAULT_OCR.get_or_try_init(Ocr::new).await?;
-        ocr.recognize(&bytes)
+        recognize_shared(&bytes).await
+    }
+
+    /// **一步解计算题**验证码:取图(同 [`ocr_image`](Self::ocr_image))→ 识别算术式 → 求值 → 答案字符串。
+    /// 适合"3+5=?"这类填空题;识别不出算术式则报错。
+    pub async fn ocr_calc(&self, selector: &str) -> Result<String> {
+        let bytes = self.fetch_image_bytes(selector).await?;
+        recognize_calc_shared(&bytes).await
     }
 
     /// 取元素的图字节:优先 `<img>` 的 `src`(`data:base64` 直接解码),否则元素浏览器级截图。
@@ -1398,8 +1436,8 @@ mod tests {
         assert_eq!(template_gate(TEMPLATE_GATE_LO), 1.0);
         let mid = template_gate((TEMPLATE_GATE_HI + TEMPLATE_GATE_LO) / 2.0);
         assert!((mid - 0.5).abs() < 1e-5);
-        // 单调:置信越高门控越小。
-        assert!(template_gate(0.05) > template_gate(0.15));
+        // 单调:置信越高门控越小(取样点落在 (LO, HI) 线性区间内,LO 以下会同被夹到 1.0)。
+        assert!(template_gate(0.30) > template_gate(0.45));
         // 永远夹在 [0,1]。
         for c in [-1.0, 0.0, 0.1, 0.5, 2.0] {
             let g = template_gate(c);

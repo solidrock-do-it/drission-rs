@@ -59,7 +59,11 @@ mod recorder;
 mod screencast;
 mod scripts;
 mod shadow;
+// 滑块求解:cdp `ChromiumTab` 的后端适配(只含 impl,类型在后端无关的 `crate::slider`)。
+#[cfg(feature = "slider")]
+mod slider;
 mod stealth;
+mod storage;
 mod tab;
 mod types;
 mod websocket;
@@ -91,6 +95,7 @@ pub use recorder::{ChromiumRecorder, RECORDER_JS};
 pub use screencast::ChromiumScreencast;
 pub use scripts::{ChromiumScripts, ScriptInfo, ScriptMatch, beautify_js};
 pub use shadow::ChromiumShadowRoot;
+pub use storage::{OriginStorage, StorageState};
 pub use tab::ChromiumTab;
 pub use types::{
     Cookie, CookieParam, DialogInfo, DownloadInfo, GetOptions, ImageFormat, LoadMode, PageRect,

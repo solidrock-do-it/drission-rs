@@ -120,21 +120,26 @@ pub struct ResumeOptions {
 }
 
 impl ResumeOptions {
+    /// 新建空覆盖(所有字段 `None`,即原样放行)。
     pub fn new() -> Self {
         Self::default()
     }
+    /// 改写请求 URL(重定向到新地址)。
     pub fn url(mut self, url: impl Into<String>) -> Self {
         self.url = Some(url.into());
         self
     }
+    /// 改写 HTTP 方法(如 `GET` → `POST`)。
     pub fn method(mut self, method: impl Into<String>) -> Self {
         self.method = Some(method.into());
         self
     }
+    /// 替换请求头(整组覆盖)。
     pub fn headers(mut self, headers: Vec<(String, String)>) -> Self {
         self.headers = Some(headers);
         self
     }
+    /// 改写请求体。
     pub fn post_data(mut self, post_data: impl Into<String>) -> Self {
         self.post_data = Some(post_data.into());
         self
