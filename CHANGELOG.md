@@ -5,6 +5,29 @@
 格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/),
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.5.1] - 2026-07-31
+
+> **AI 读页 + MCP 防卡退**:让 Agent 一条命令读懂当前页(大纲 / refs / Markdown),并避免重页把 MCP 卡死。
+
+### 新增 Added
+
+- **`drs snapshot` / MCP `browser_snapshot`**:interesting-only 语义大纲 + 可交互 `ref=eN` + 短正文;
+  `click` / `type` 支持 `ref:e1`(写入 `data-drs-ref`)。见 `src/ai_snapshot.rs`。
+- **HTML→Markdown(`htmd`)**:`src/html_md.rs`;`snapshot` / `extract` 默认附带 `markdown`,
+  另增 `drs markdown` / MCP `browser_markdown`。
+- 文档:`docs/AI页面快照.md`、`docs/工具与约定.md`;skill / `docs/CLI.md` 同步首选读页路径。
+
+### 变更 Changed
+
+- `drission` 升到 0.5.1,`drission-cli` 升到 0.3.1。
+
+### 修复 Fixed
+
+- MCP / daemon RPC 默认 60s 超时(`DRS_MCP_TIMEOUT_MS` / `DRS_DAEMON_TIMEOUT_MS`),超时返回 `timeout`
+  而非挂死。
+- `browser_html` 默认截断 20 万字符;`extract` 的 ax 短超时软失败(`outlineError`);
+  `AX_SNAPSHOT_JS` 加时间预算,降低重 SPA 卡死概率。
+
 ## [0.5.0] - 2026-07-26
 
 > **默认后端(CDP)能力大补齐 + 滑块后端无关**:把此前只在 Camoufox 后端的登录态存取、代理池、滑块
@@ -325,7 +348,10 @@
 - **内置验证码 OCR**(ddddocr 模型 + tract 纯 Rust 推理)与**图片滑块缺口距离识别**(极验)。
 - 跨平台:macOS / Linux / Windows(命名管道传输)。
 
-[0.3.2]: https://github.com/MageGojo/drission-rs/compare/v0.3.1...HEAD
+[0.5.1]: https://github.com/MageGojo/drission-rs/compare/v0.5.0...v0.5.1
+[0.5.0]: https://github.com/MageGojo/drission-rs/compare/v0.4.0...v0.5.0
+[0.4.0]: https://github.com/MageGojo/drission-rs/compare/v0.3.2...v0.4.0
+[0.3.2]: https://github.com/MageGojo/drission-rs/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/MageGojo/drission-rs/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/MageGojo/drission-rs/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/MageGojo/drission-rs/compare/v0.1.1...v0.2.0

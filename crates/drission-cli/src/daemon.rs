@@ -63,6 +63,13 @@ pub async fn run_server(
     Ok(())
 }
 
+fn daemon_rpc_timeout_ms() -> u64 {
+    std::env::var("DRS_DAEMON_TIMEOUT_MS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(60_000)
+}
+
 pub async fn send_to_daemon(command: EngineCommand) -> Result<JsonResponse> {
     let state = match read_state_file().await {
         Ok(state) => state,
@@ -93,9 +100,34 @@ pub async fn send_to_daemon(command: EngineCommand) -> Result<JsonResponse> {
     stream.write_all(line.as_bytes()).await?;
     stream.flush().await?;
 
+    let timeout_ms = daemon_rpc_timeout_ms();
     let mut reader = BufReader::new(stream);
     let mut buf = String::new();
-    reader.read_line(&mut buf).await?;
+    match tokio::time::timeout(
+        std::time::Duration::from_millis(timeout_ms),
+        reader.read_line(&mut buf),
+    )
+    .await
+    {
+        Ok(Ok(_)) => {}
+        Ok(Err(e)) => {
+            return Ok(JsonResponse::err(
+                "daemon_error",
+                format!("failed reading daemon response: {e}"),
+                Some("retry the request; the daemon may have crashed".to_string()),
+            ));
+        }
+        Err(_) => {
+            return Ok(JsonResponse::err(
+                "timeout",
+                format!("daemon command timed out after {timeout_ms}ms"),
+                Some(
+                    "page may be automation-hostile; try `drs snapshot` / browser_snapshot, or raise DRS_DAEMON_TIMEOUT_MS"
+                        .to_string(),
+                ),
+            ));
+        }
+    }
     if buf.trim().is_empty() {
         return Ok(JsonResponse::err(
             "empty_response",

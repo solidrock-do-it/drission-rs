@@ -344,6 +344,8 @@ pub const AX_SNAPSHOT_JS: &str = r#"(()=>{
     reset:'button',range:'slider',search:'searchbox',email:'textbox',tel:'textbox',
     url:'textbox',number:'spinbutton',password:'textbox',text:'textbox'};
   const SKIP={script:1,style:1,noscript:1,template:1,head:1,meta:1,link:1,br:1,svg:1,path:1};
+  const t0=Date.now(), BUDGET=2500;
+  const timedOut=()=>Date.now()-t0>BUDGET;
   const roleOf=(el)=>{
     const ex=el.getAttribute('role'); if(ex) return ex.trim().split(/\s+/)[0];
     const tag=el.tagName.toLowerCase();
@@ -366,9 +368,16 @@ pub const AX_SNAPSHOT_JS: &str = r#"(()=>{
       return (el.innerText||'').trim().slice(0,120);
     return '';
   };
-  const visible=(el)=>{const s=window.getComputedStyle(el);
-    if(!s||s.display==='none'||s.visibility==='hidden'||s.visibility==='collapse')return false;
-    if(el.hasAttribute('hidden')||el.getAttribute('aria-hidden')==='true')return false;return true;};
+  // Prefer cheap visibility checks; only sample getComputedStyle to avoid SPA hangs.
+  const visible=(el)=>{
+    if(el.hasAttribute('hidden')||el.getAttribute('aria-hidden')==='true')return false;
+    const st=el.getAttribute('style')||'';
+    if(/display\s*:\s*none/i.test(st)||/visibility\s*:\s*hidden/i.test(st))return false;
+    if((el.offsetWidth||0)+(el.offsetHeight||0)>0) return true;
+    try{const s=window.getComputedStyle(el);
+      if(!s||s.display==='none'||s.visibility==='hidden'||s.visibility==='collapse')return false;
+    }catch(_e){return false;}
+    return true;};
   const propsOf=(el)=>{const p={};
     if(el.hasAttribute('disabled'))p.disabled='true';
     const ac=el.getAttribute('aria-checked');
@@ -384,11 +393,11 @@ pub const AX_SNAPSHOT_JS: &str = r#"(()=>{
     if(tag==='textarea')return el.value||'';return '';};
   let count=0;const MAX=4000;
   function build(el){
-    if(count>MAX||!el||el.nodeType!==1)return null;
+    if(timedOut()||count>MAX||!el||el.nodeType!==1)return null;
     if(SKIP[el.tagName.toLowerCase()])return null;
     if(!visible(el))return null;
     count++;
-    const kids=[];for(const c of el.children){const k=build(c);if(k)kids.push(k);}
+    const kids=[];for(const c of el.children){if(timedOut())break;const k=build(c);if(k)kids.push(k);}
     const role=roleOf(el),name=nameOf(el),pr=propsOf(el),val=valueOf(el);
     if(!role&&!name&&!val&&Object.keys(pr).length===0){
       if(kids.length===0)return null;

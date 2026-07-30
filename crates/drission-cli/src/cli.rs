@@ -70,8 +70,33 @@ pub enum Command {
         #[arg(long = "json", conflicts_with = "outline")]
         tree_json: bool,
     },
-    /// Print current page HTML.
-    Html,
+    /// AI-readable page snapshot (interesting controls + refs + markdown). Prefer this for agents.
+    Snapshot {
+        /// JS time budget in milliseconds (default 2000).
+        #[arg(long)]
+        budget_ms: Option<u64>,
+        /// Max outline items (default 250).
+        #[arg(long)]
+        max_items: Option<usize>,
+        /// Truncate accompanying body text (default 8000).
+        #[arg(long)]
+        max_text_chars: Option<usize>,
+        /// Truncate HTML→Markdown (default 50000). Pass 0 to skip markdown.
+        #[arg(long)]
+        max_markdown_chars: Option<usize>,
+    },
+    /// Convert the active page body to Markdown (htmd). Better for agents than raw HTML.
+    Markdown {
+        /// Truncate markdown to this many Unicode scalars (default 50000).
+        #[arg(long)]
+        max_chars: Option<usize>,
+    },
+    /// Print current page HTML (truncated by default to protect MCP/agents).
+    Html {
+        /// Truncate HTML to this many Unicode scalars (default 200000).
+        #[arg(long)]
+        max_chars: Option<usize>,
+    },
     /// Print the active tab title.
     Title,
     /// Print the active tab URL.
@@ -94,9 +119,15 @@ pub enum Command {
         /// Include full accessibility tree JSON.
         #[arg(long = "include-ax-json")]
         include_ax_json: bool,
+        /// Skip HTML→Markdown in the bundle (markdown is included by default).
+        #[arg(long = "no-markdown", default_value_t = false)]
+        no_markdown: bool,
         /// Truncate text/html to this many Unicode scalars.
         #[arg(long)]
         max_text_chars: Option<usize>,
+        /// Truncate markdown to this many Unicode scalars (default 50000).
+        #[arg(long)]
+        max_markdown_chars: Option<usize>,
         /// Save a screenshot while extracting.
         #[arg(long)]
         screenshot_out: Option<PathBuf>,
@@ -1219,7 +1250,19 @@ impl Command {
                 };
                 EngineCommand::Ax { format }
             }
-            Command::Html => EngineCommand::Html,
+            Command::Snapshot {
+                budget_ms,
+                max_items,
+                max_text_chars,
+                max_markdown_chars,
+            } => EngineCommand::Snapshot {
+                budget_ms,
+                max_items,
+                max_text_chars,
+                max_markdown_chars,
+            },
+            Command::Markdown { max_chars } => EngineCommand::Markdown { max_chars },
+            Command::Html { max_chars } => EngineCommand::Html { max_chars },
             Command::Title => EngineCommand::Title,
             Command::Url => EngineCommand::Url,
             Command::Extract {
@@ -1229,7 +1272,9 @@ impl Command {
                 pass_cf,
                 include_html,
                 include_ax_json,
+                no_markdown,
                 max_text_chars,
+                max_markdown_chars,
                 screenshot_out,
                 full,
                 save_out: _,
@@ -1240,7 +1285,9 @@ impl Command {
                 pass_cf,
                 include_html,
                 include_ax_json,
+                include_markdown: !no_markdown,
                 max_text_chars,
+                max_markdown_chars,
                 screenshot_out,
                 full_screenshot: full,
             },
@@ -1446,6 +1493,37 @@ mod tests {
             }
             other => panic!("unexpected command: {other:?}"),
         }
+    }
+
+    #[test]
+    fn parses_snapshot_command() {
+        let cli = Cli::try_parse_from([
+            "drs",
+            "snapshot",
+            "--budget-ms",
+            "1500",
+            "--max-items",
+            "100",
+            "--max-text-chars",
+            "4000",
+            "--max-markdown-chars",
+            "9000",
+        ])
+        .unwrap();
+        let eng = cli.command.into_engine().expect("snapshot maps to engine");
+        let EngineCommand::Snapshot {
+            budget_ms,
+            max_items,
+            max_text_chars,
+            max_markdown_chars,
+        } = eng
+        else {
+            panic!("expected EngineCommand::Snapshot");
+        };
+        assert_eq!(budget_ms, Some(1500));
+        assert_eq!(max_items, Some(100));
+        assert_eq!(max_text_chars, Some(4000));
+        assert_eq!(max_markdown_chars, Some(9000));
     }
 
     #[test]

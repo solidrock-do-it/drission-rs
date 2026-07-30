@@ -26,6 +26,10 @@
 /// 无障碍快照(后端无关):`AxNode`/`AxTree` + DOM 快照脚本 + CDP 扁平树重建。
 /// `tab.ax_tree()`(cdp 原生)/ `tab.ax_snapshot()`(两后端)各自提供。
 pub mod a11y;
+/// AI / MCP 友好页面快照(interesting-only + ref):`drs snapshot` / `browser_snapshot`。
+pub mod ai_snapshot;
+/// HTML → Markdown(`htmd`),供 AI 读页。
+pub mod html_md;
 /// Camoufox / Firefox(Juggler)后端 + 全部高层浏览器能力。仅 `--features camoufox`。
 #[cfg(feature = "camoufox")]
 pub mod browser;

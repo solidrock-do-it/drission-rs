@@ -131,6 +131,32 @@ impl BackendTab {
         }
     }
 
+    /// Body innerHTML only — cheaper input for HTML→Markdown than full document.
+    pub async fn body_html(&self) -> Result<String> {
+        let v = self
+            .eval("document.body ? document.body.innerHTML : ''")
+            .await?;
+        Ok(v.as_str().unwrap_or_default().to_string())
+    }
+
+    /// AI-oriented interesting-only snapshot with interactive refs.
+    pub async fn ai_snapshot(
+        &self,
+        budget_ms: Option<u64>,
+        max_items: Option<usize>,
+        max_text_chars: Option<usize>,
+    ) -> Result<Value> {
+        let js = drission::ai_snapshot::ai_snapshot_js(
+            budget_ms.unwrap_or(drission::ai_snapshot::DEFAULT_BUDGET_MS),
+            max_items.unwrap_or(drission::ai_snapshot::DEFAULT_MAX_ITEMS),
+            max_text_chars.unwrap_or(drission::ai_snapshot::DEFAULT_MAX_TEXT_CHARS),
+        );
+        let raw = self.eval(&js).await?;
+        let snap = drission::ai_snapshot::AiSnapshot::from_value(&raw)
+            .ok_or_else(|| anyhow!("ai snapshot returned unexpected shape: {raw}"))?;
+        Ok(snap.into_json_fields())
+    }
+
     pub async fn text(&self, selector: Option<&str>) -> Result<String> {
         match (self, selector) {
             #[cfg(feature = "cdp")]
@@ -227,27 +253,30 @@ impl BackendTab {
     }
 
     pub async fn click(&self, selector: &str) -> Result<()> {
+        let selector = drission::ai_snapshot::resolve_selector(selector);
         match self {
             #[cfg(feature = "cdp")]
-            BackendTab::Cdp(tab) => tab.click(selector).await?,
+            BackendTab::Cdp(tab) => tab.click(&selector).await?,
             #[cfg(feature = "camoufox")]
-            BackendTab::Camoufox(tab) => tab.click(selector).await?,
+            BackendTab::Camoufox(tab) => tab.click(&selector).await?,
         }
         Ok(())
     }
 
     pub async fn type_text(&self, selector: &str, text: &str) -> Result<()> {
+        let selector = drission::ai_snapshot::resolve_selector(selector);
         match self {
             #[cfg(feature = "cdp")]
-            BackendTab::Cdp(tab) => tab.input(selector, text).await?,
+            BackendTab::Cdp(tab) => tab.input(&selector, text).await?,
             #[cfg(feature = "camoufox")]
-            BackendTab::Camoufox(tab) => tab.input(selector, text).await?,
+            BackendTab::Camoufox(tab) => tab.input(&selector, text).await?,
         }
         Ok(())
     }
 
     pub async fn press(&self, key: &str, selector: Option<&str>) -> Result<()> {
-        match (self, selector) {
+        let selector = selector.map(drission::ai_snapshot::resolve_selector);
+        match (self, selector.as_deref()) {
             #[cfg(feature = "cdp")]
             (BackendTab::Cdp(tab), Some(selector)) => {
                 tab.ele(selector)
@@ -271,11 +300,12 @@ impl BackendTab {
     }
 
     pub async fn wait(&self, selector: &str, timeout: Option<Duration>) -> Result<bool> {
+        let selector = drission::ai_snapshot::resolve_selector(selector);
         match self {
             #[cfg(feature = "cdp")]
-            BackendTab::Cdp(tab) => Ok(tab.wait().ele_displayed(selector, timeout).await?),
+            BackendTab::Cdp(tab) => Ok(tab.wait().ele_displayed(&selector, timeout).await?),
             #[cfg(feature = "camoufox")]
-            BackendTab::Camoufox(tab) => Ok(tab.wait().ele_displayed(selector, timeout).await?),
+            BackendTab::Camoufox(tab) => Ok(tab.wait().ele_displayed(&selector, timeout).await?),
         }
     }
 

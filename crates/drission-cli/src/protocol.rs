@@ -102,7 +102,27 @@ pub enum EngineCommand {
     Ax {
         format: AxFormat,
     },
-    Html,
+    /// AI-oriented page snapshot (interesting-only + refs + markdown). Prefer this over Html/Ax for agents.
+    Snapshot {
+        /// JS time budget in ms (default 2000).
+        budget_ms: Option<u64>,
+        /// Max outline items (default 250).
+        max_items: Option<usize>,
+        /// Truncate accompanying body text (default 8000).
+        max_text_chars: Option<usize>,
+        /// Truncate HTML→Markdown body (default 50000). Set 0 to skip markdown.
+        max_markdown_chars: Option<usize>,
+    },
+    /// Convert the active page body HTML to Markdown (htmd).
+    Markdown {
+        /// Truncate markdown to this many Unicode scalars (default 50000).
+        max_chars: Option<usize>,
+    },
+    Html {
+        /// Truncate HTML to this many Unicode scalars (default 200_000).
+        #[serde(default)]
+        max_chars: Option<usize>,
+    },
     Text {
         selector: Option<String>,
     },
@@ -172,7 +192,10 @@ pub enum EngineCommand {
         pass_cf: bool,
         include_html: bool,
         include_ax_json: bool,
+        /// Include HTML→Markdown body (default true). Better for agents than raw HTML.
+        include_markdown: bool,
         max_text_chars: Option<usize>,
+        max_markdown_chars: Option<usize>,
         screenshot_out: Option<PathBuf>,
         full_screenshot: bool,
     },

@@ -13,15 +13,33 @@ description: Mandatory browser and live web content gateway via the local `drs` 
 4. **先确保 daemon**：任意 daemon 命令前执行 `drs ensure-serve --headless`，或给命令加 `--ensure-serve --ensure-headless`。
 5. **内容先落盘**：抓到的页面 bundle / 网络包 / 截图先写入项目 `data/browser/`（JSON/PNG），再分析。
 
-## 首选：一条命令提取页面
+## 首选：读懂当前页
+
+已有打开的标签时，用 **`browser_snapshot` / `drs snapshot`**（不要先拉整页 HTML）：
 
 ```bash
 drs ensure-serve --headless
+drs --json open https://example.com
+drs --json snapshot
+```
+
+返回 `title` / `url` / `snapshot`（可交互节点带 `[ref=e1]`）/ `refs` / **`markdown`(htmd)** / 短正文。随后点击/输入：
+
+```bash
+drs --json click "ref:e1"
+drs --json type "ref:e2" "hello"
+```
+
+MCP 等价：`browser_snapshot` → `browser_click({ "ref": "e1" })` / `browser_type({ "ref": "e2", "text": "hello" })`。
+
+一次性打开并抽取仍可用 `extract`：
+
+```bash
 drs --json extract https://example.com \
   --save-out data/browser/example.json
 ```
 
-`extract` 返回 `title`、`url`、`text`、`outline`；需要时用 `--include-html`、`--include-ax-json`、`--pass-cf`、`--wait-selector`、`--screenshot-out`。
+重页/反自动化页优先 `snapshot`，避免 `browser_html` / 完整 `ax` 卡死 MCP（超时错误码 `timeout`）。
 
 ## 常用 CLI（均建议 `--ensure-serve --ensure-headless --json`）
 
@@ -29,6 +47,7 @@ drs --json extract https://example.com \
 |---|---|
 | 状态 | `drs --json status` |
 | 打开页 | `drs --json open URL` |
+| **读懂当前页** | **`drs --json snapshot`**（首选） |
 | 读语义树 | `drs --json ax --json` 或 `drs ax --outline` |
 | 读正文 | `drs text` 或 `drs text "css:h1"` |
 | 读标题/URL | `drs --json title` / `drs --json url` |
@@ -41,8 +60,10 @@ drs --json extract https://example.com \
 
 项目已配置 `.cursor/mcp.json`，server 名 **`drs`**。优先工具：
 
-- **`browser_extract`** — 打开 URL 并返回 title/url/text/outline（首选）
-- `browser_open` / `browser_ax` / `browser_text` / `browser_html` / `browser_screenshot`
+- **`browser_snapshot`** — 读懂当前页（首选：大纲 + refs + 短正文）
+- **`browser_extract`** — 打开 URL 并返回 title/url/text/outline
+- `browser_open` / `browser_ax` / `browser_text` / `browser_html`（默认截断）/ `browser_screenshot`
+- `browser_click` / `browser_type`（可用 snapshot 的 `ref`）
 - `network_listen_start` / `network_listen_wait`
 - `browser_pass_cf`
 
@@ -53,8 +74,9 @@ MCP 默认 **attach 到常驻 daemon 的同一个持久浏览器**：浏览器�
 ```
 需要浏览器或动态页面内容？
 ├─ 是 → 只用 drs（CLI 或 MCP）
-│   ├─ 一次性读页面 → browser_extract / drs extract
-│   ├─ 多步交互 → ensure-serve + open/click/type/wait
+│   ├─ 看当前页有什么 → browser_snapshot / drs snapshot（首选）
+│   ├─ 一次性打开+读 → browser_extract / drs extract
+│   ├─ 多步交互 → snapshot → click/type(ref) / wait
 │   └─ 抓 API → listen start + wait
 └─ 否（静态 JSON/API，无反爬）→ 可用普通 HTTP 客户端
 ```

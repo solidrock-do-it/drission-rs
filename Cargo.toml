@@ -1,6 +1,6 @@
 [package]
 name = "drission"
-version = "0.5.0"
+version = "0.5.1"
 edition = "2024"
 rust-version = "1.85"
 # 示例按能力分文件夹(examples/<分类>/),每个 [[example]] 显式声明 path;关掉自动发现(子目录无
@@ -69,6 +69,8 @@ dirs = "6.0.0"
 ego-tree = "0.11"
 fontdue = { version = "0.9.3", optional = true }
 futures-util = "0.3.32"
+# HTML → Markdown(供 AI/MCP 读页;`drs snapshot` / `extract` 默认附带 markdown)。
+htmd = "0.5"
 image = { version = "0.25.10", default-features = false, features = ["png", "jpeg"], optional = true }
 libc = "0.2.186"
 os_pipe = { version = "1.2.3", features = ["io_safety"] }

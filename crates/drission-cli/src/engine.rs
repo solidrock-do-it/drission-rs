@@ -91,9 +91,44 @@ impl BrowserState {
                 }
                 json!({ "closed": id, "activeTabId": self.active })
             }
-            EngineCommand::Ax { format } => self.active_tab()?.ax(format).await?,
-            EngineCommand::Html => json!({ "html": self.active_tab()?.html().await? }),
+            EngineCommand::Ax { format } => {
+                // Keep daemon responsive on automation-hostile pages.
+                match tokio::time::timeout(Duration::from_secs(12), self.active_tab()?.ax(format))
+                    .await
+                {
+                    Ok(Ok(v)) => v,
+                    Ok(Err(e)) => return Err(e),
+                    Err(_) => {
+                        return Err(anyhow!(
+                            "accessibility snapshot timed out after 12s; try `drs snapshot` instead"
+                        ));
+                    }
+                }
+            }
+            EngineCommand::Snapshot {
+                budget_ms,
+                max_items,
+                max_text_chars,
+                max_markdown_chars,
+            } => self.snapshot(budget_ms, max_items, max_text_chars, max_markdown_chars).await?,
+            EngineCommand::Markdown { max_chars } => self.page_markdown(max_chars).await?,
+            EngineCommand::Html { max_chars } => {
+                let html_fut = self.active_tab()?.html();
+                let mut html = match tokio::time::timeout(Duration::from_secs(15), html_fut).await {
+                    Ok(Ok(v)) => v,
+                    Ok(Err(e)) => return Err(e),
+                    Err(_) => {
+                        return Err(anyhow!(
+                            "html timed out after 15s; prefer `drs snapshot` for agents"
+                        ));
+                    }
+                };
+                let limit = max_chars.unwrap_or(200_000);
+                let truncated = truncate_chars(&mut html, limit);
+                json!({ "html": html, "truncated": truncated, "maxChars": limit })
+            }
             EngineCommand::Text { selector } => {
+                let selector = selector.map(|s| drission::ai_snapshot::resolve_selector(&s));
                 json!({ "text": self.active_tab()?.text(selector.as_deref()).await? })
             }
             EngineCommand::Eval { js } => json!({ "value": self.active_tab()?.eval(&js).await? }),
@@ -190,7 +225,9 @@ impl BrowserState {
                 pass_cf,
                 include_html,
                 include_ax_json,
+                include_markdown,
                 max_text_chars,
+                max_markdown_chars,
                 screenshot_out,
                 full_screenshot,
             } => {
@@ -201,7 +238,9 @@ impl BrowserState {
                     pass_cf,
                     include_html,
                     include_ax_json,
+                    include_markdown,
                     max_text_chars,
+                    max_markdown_chars,
                     screenshot_out,
                     full_screenshot,
                 )
@@ -209,6 +248,86 @@ impl BrowserState {
             }
         };
         Ok(EngineResult { data, stop: false })
+    }
+
+    async fn snapshot(
+        &mut self,
+        budget_ms: Option<u64>,
+        max_items: Option<usize>,
+        max_text_chars: Option<usize>,
+        max_markdown_chars: Option<usize>,
+    ) -> Result<Value> {
+        let tab_id = self.active.ok_or_else(|| anyhow!("no active tab"))?;
+        let mut snap = {
+            let tab = self.active_tab()?;
+            let title = tab.title().await?;
+            let url = tab.url().await?;
+            let snap_fut = tab.ai_snapshot(budget_ms, max_items, max_text_chars);
+            let mut snap = match tokio::time::timeout(Duration::from_secs(15), snap_fut).await {
+                Ok(Ok(v)) => v,
+                Ok(Err(e)) => return Err(e),
+                Err(_) => {
+                    return Err(anyhow!(
+                        "AI snapshot timed out after 15s (page may be automation-hostile)"
+                    ));
+                }
+            };
+            if let Some(obj) = snap.as_object_mut() {
+                obj.insert("tabId".into(), json!(tab_id));
+                obj.insert("title".into(), json!(title));
+                obj.insert("url".into(), json!(url));
+            }
+            snap
+        };
+        // max_markdown_chars=Some(0) skips conversion (agents that only want refs).
+        if max_markdown_chars != Some(0) {
+            self.attach_markdown(&mut snap, max_markdown_chars).await;
+        }
+        Ok(snap)
+    }
+
+    async fn page_markdown(&self, max_chars: Option<usize>) -> Result<Value> {
+        let tab_id = self.active.ok_or_else(|| anyhow!("no active tab"))?;
+        let tab = self.active_tab()?;
+        let title = tab.title().await?;
+        let url = tab.url().await?;
+        let html = match tokio::time::timeout(Duration::from_secs(12), tab.body_html()).await {
+            Ok(Ok(h)) => h,
+            Ok(Err(e)) => return Err(e),
+            Err(_) => return Err(anyhow!("body html timed out after 12s")),
+        };
+        let mut data = drission::html_md::markdown_fields(&html, max_chars);
+        if let Some(obj) = data.as_object_mut() {
+            obj.insert("tabId".into(), json!(tab_id));
+            obj.insert("title".into(), json!(title));
+            obj.insert("url".into(), json!(url));
+        }
+        Ok(data)
+    }
+
+    async fn attach_markdown(&self, data: &mut Value, max_chars: Option<usize>) {
+        let Ok(tab) = self.active_tab() else {
+            data["markdownError"] = Value::String("no active tab".into());
+            return;
+        };
+        let html = match tokio::time::timeout(Duration::from_secs(12), tab.body_html()).await {
+            Ok(Ok(h)) => h,
+            Ok(Err(e)) => {
+                data["markdownError"] = Value::String(e.to_string());
+                return;
+            }
+            Err(_) => {
+                data["markdownError"] = Value::String("body html timed out after 12s".into());
+                return;
+            }
+        };
+        if let Some(fields) = drission::html_md::markdown_fields(&html, max_chars).as_object() {
+            if let Some(obj) = data.as_object_mut() {
+                for (k, v) in fields {
+                    obj.insert(k.clone(), v.clone());
+                }
+            }
+        }
     }
 
     async fn extract(
@@ -219,7 +338,9 @@ impl BrowserState {
         pass_cf: bool,
         include_html: bool,
         include_ax_json: bool,
+        include_markdown: bool,
         max_text_chars: Option<usize>,
+        max_markdown_chars: Option<usize>,
         screenshot_out: Option<PathBuf>,
         full_screenshot: bool,
     ) -> Result<Value> {
@@ -247,47 +368,86 @@ impl BrowserState {
                 .await?;
         }
 
-        let tab = self.active_tab()?;
-        let title = tab.title().await?;
-        let current_url = tab.url().await?;
-        let mut text = tab.text(None).await?;
-        let text_truncated = truncate_chars(&mut text, max_text_chars.unwrap_or(50_000));
+        let mut data = {
+            let tab = self.active_tab()?;
+            let title = tab.title().await?;
+            let current_url = tab.url().await?;
+            let mut text = tab.text(None).await?;
+            let text_truncated = truncate_chars(&mut text, max_text_chars.unwrap_or(50_000));
 
-        let outline = tab
-            .ax(crate::protocol::AxFormat::Outline)
-            .await?
-            .get("outline")
-            .and_then(Value::as_str)
-            .unwrap_or_default()
-            .to_string();
+            // Accessibility outline can hang on automation-hostile pages; soft-fail
+            // so extract still returns title/url/text for agents.
+            let ax_timeout = Duration::from_millis(timeout_ms.unwrap_or(8_000).min(15_000));
+            let (outline, outline_error) = match tokio::time::timeout(
+                ax_timeout,
+                tab.ax(crate::protocol::AxFormat::Outline),
+            )
+            .await
+            {
+                Ok(Ok(v)) => (
+                    v.get("outline")
+                        .and_then(Value::as_str)
+                        .unwrap_or_default()
+                        .to_string(),
+                    None,
+                ),
+                Ok(Err(e)) => (String::new(), Some(e.to_string())),
+                Err(_) => (
+                    String::new(),
+                    Some(format!(
+                        "ax outline timed out after {}ms",
+                        ax_timeout.as_millis()
+                    )),
+                ),
+            };
 
-        let mut data = json!({
-            "tabId": tab_id,
-            "url": current_url,
-            "title": title,
-            "text": text,
-            "outline": outline,
-            "textTruncated": text_truncated,
-        });
+            let mut data = json!({
+                "tabId": tab_id,
+                "url": current_url,
+                "title": title,
+                "text": text,
+                "outline": outline,
+                "textTruncated": text_truncated,
+            });
+            if let Some(err) = outline_error {
+                data["outlineError"] = Value::String(err);
+            }
 
-        if include_html {
-            let mut html = tab.html().await?;
-            let html_truncated = truncate_chars(&mut html, max_text_chars.unwrap_or(200_000));
-            data["html"] = Value::String(html);
-            data["htmlTruncated"] = Value::Bool(html_truncated);
-        }
+            if include_html {
+                let mut html = tab.html().await?;
+                let html_truncated = truncate_chars(&mut html, max_text_chars.unwrap_or(200_000));
+                data["html"] = Value::String(html);
+                data["htmlTruncated"] = Value::Bool(html_truncated);
+            }
 
-        if include_ax_json {
-            data["ax"] = tab.ax(crate::protocol::AxFormat::Json).await?;
-        }
-
-        if let Some(path) = screenshot_out {
-            let shot = tab.screenshot(Some(path), full_screenshot, false).await?;
-            if let Some(obj) = shot.as_object() {
-                for (key, value) in obj {
-                    data[key.clone()] = value.clone();
+            if include_ax_json {
+                match tokio::time::timeout(ax_timeout, tab.ax(crate::protocol::AxFormat::Json))
+                    .await
+                {
+                    Ok(Ok(v)) => data["ax"] = v,
+                    Ok(Err(e)) => data["axError"] = Value::String(e.to_string()),
+                    Err(_) => {
+                        data["axError"] = Value::String(format!(
+                            "ax json timed out after {}ms",
+                            ax_timeout.as_millis()
+                        ));
+                    }
                 }
             }
+
+            if let Some(path) = screenshot_out {
+                let shot = tab.screenshot(Some(path), full_screenshot, false).await?;
+                if let Some(obj) = shot.as_object() {
+                    for (key, value) in obj {
+                        data[key.clone()] = value.clone();
+                    }
+                }
+            }
+            data
+        };
+
+        if include_markdown && max_markdown_chars != Some(0) {
+            self.attach_markdown(&mut data, max_markdown_chars).await;
         }
 
         Ok(data)

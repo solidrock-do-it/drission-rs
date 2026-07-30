@@ -107,9 +107,46 @@ impl DrsMcp {
         .await
     }
 
-    #[tool(name = "browser_html", description = "Get the active page HTML")]
-    async fn browser_html(&self) -> CallToolResult {
-        self.exec(EngineCommand::Html).await
+    #[tool(
+        name = "browser_snapshot",
+        description = "AI-readable snapshot of the active page: title/url, interesting controls with refs (e1..), HTML→Markdown body, and short text. Prefer this over browser_html/browser_ax."
+    )]
+    async fn browser_snapshot(
+        &self,
+        Parameters(req): Parameters<SnapshotParams>,
+    ) -> CallToolResult {
+        self.exec(EngineCommand::Snapshot {
+            budget_ms: req.budget_ms,
+            max_items: req.max_items,
+            max_text_chars: req.max_text_chars,
+            max_markdown_chars: req.max_markdown_chars,
+        })
+        .await
+    }
+
+    #[tool(
+        name = "browser_markdown",
+        description = "Convert the active page body HTML to Markdown (htmd). Prefer browser_snapshot for interactive refs + markdown together."
+    )]
+    async fn browser_markdown(
+        &self,
+        Parameters(req): Parameters<MarkdownParams>,
+    ) -> CallToolResult {
+        self.exec(EngineCommand::Markdown {
+            max_chars: req.max_chars,
+        })
+        .await
+    }
+
+    #[tool(
+        name = "browser_html",
+        description = "Get the active page HTML (truncated by default; prefer browser_snapshot for agents)"
+    )]
+    async fn browser_html(&self, Parameters(req): Parameters<HtmlParams>) -> CallToolResult {
+        self.exec(EngineCommand::Html {
+            max_chars: req.max_chars,
+        })
+        .await
     }
 
     #[tool(name = "browser_title", description = "Get the active tab title")]
@@ -134,7 +171,9 @@ impl DrsMcp {
             pass_cf: req.pass_cf.unwrap_or(false),
             include_html: req.include_html.unwrap_or(false),
             include_ax_json: req.include_ax_json.unwrap_or(false),
+            include_markdown: req.include_markdown.unwrap_or(true),
             max_text_chars: req.max_text_chars,
+            max_markdown_chars: req.max_markdown_chars,
             screenshot_out: req.screenshot_out,
             full_screenshot: req.full.unwrap_or(false),
         })
@@ -170,22 +209,53 @@ impl DrsMcp {
 
     #[tool(
         name = "browser_click",
-        description = "Click an element in the active tab"
+        description = "Click an element in the active tab. Use selector, or ref from browser_snapshot (e.g. e1 / ref:e1)."
     )]
-    async fn browser_click(&self, Parameters(req): Parameters<SelectorParams>) -> CallToolResult {
-        self.exec(EngineCommand::Click {
-            selector: req.selector,
-        })
-        .await
+    async fn browser_click(&self, Parameters(req): Parameters<ClickParams>) -> CallToolResult {
+        let selector = match (req.ref_id, req.selector) {
+            (Some(r), _) => {
+                if r.starts_with("ref:") {
+                    r
+                } else {
+                    format!("ref:{r}")
+                }
+            }
+            (None, Some(s)) => s,
+            (None, None) => {
+                return result_to_tool(JsonResponse::err(
+                    "invalid_args",
+                    "browser_click requires selector or ref",
+                    None,
+                ));
+            }
+        };
+        self.exec(EngineCommand::Click { selector }).await
     }
 
     #[tool(
         name = "browser_type",
-        description = "Type text into an element in the active tab"
+        description = "Type text into an element in the active tab. Use selector, or ref from browser_snapshot (e.g. e1 / ref:e1)."
     )]
     async fn browser_type(&self, Parameters(req): Parameters<TypeParams>) -> CallToolResult {
+        let selector = match (req.ref_id.clone(), req.selector.clone()) {
+            (Some(r), _) => {
+                if r.starts_with("ref:") {
+                    r
+                } else {
+                    format!("ref:{r}")
+                }
+            }
+            (None, Some(s)) => s,
+            (None, None) => {
+                return result_to_tool(JsonResponse::err(
+                    "invalid_args",
+                    "browser_type requires selector or ref",
+                    None,
+                ));
+            }
+        };
         self.exec(EngineCommand::Type {
-            selector: req.selector,
+            selector,
             text: req.text,
         })
         .await
@@ -618,7 +688,23 @@ impl DrsMcp {
 
 impl DrsMcp {
     async fn exec(&self, command: EngineCommand) -> CallToolResult {
-        result_to_tool(self.exec_response(command).await)
+        let timeout_ms = mcp_command_timeout_ms();
+        match tokio::time::timeout(
+            std::time::Duration::from_millis(timeout_ms),
+            self.exec_response(command),
+        )
+        .await
+        {
+            Ok(response) => result_to_tool(response),
+            Err(_) => result_to_tool(JsonResponse::err(
+                "timeout",
+                format!("MCP browser command timed out after {timeout_ms}ms"),
+                Some(
+                    "page may be automation-hostile; try browser_snapshot, or raise DRS_MCP_TIMEOUT_MS"
+                        .to_string(),
+                ),
+            )),
+        }
     }
 
     async fn exec_response(&self, command: EngineCommand) -> JsonResponse {
@@ -726,6 +812,37 @@ struct AxParams {
 }
 
 #[derive(Debug, Deserialize, Serialize, JsonSchema)]
+struct SnapshotParams {
+    /// JS time budget in ms (default 2000).
+    budget_ms: Option<u64>,
+    /// Max outline items (default 250).
+    max_items: Option<usize>,
+    /// Truncate body text (default 8000).
+    max_text_chars: Option<usize>,
+    /// Truncate HTML→Markdown (default 50000). Pass 0 to skip markdown.
+    max_markdown_chars: Option<usize>,
+}
+
+#[derive(Debug, Deserialize, Serialize, JsonSchema)]
+struct MarkdownParams {
+    /// Truncate markdown to this many Unicode scalars (default 50000).
+    max_chars: Option<usize>,
+}
+
+#[derive(Debug, Deserialize, Serialize, JsonSchema)]
+struct HtmlParams {
+    /// Truncate HTML to this many Unicode scalars (default 200000).
+    max_chars: Option<usize>,
+}
+
+fn mcp_command_timeout_ms() -> u64 {
+    std::env::var("DRS_MCP_TIMEOUT_MS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(60_000)
+}
+
+#[derive(Debug, Deserialize, Serialize, JsonSchema)]
 struct CloseTabParams {
     tab_id: Option<u64>,
 }
@@ -738,7 +855,10 @@ struct ExtractParams {
     pass_cf: Option<bool>,
     include_html: Option<bool>,
     include_ax_json: Option<bool>,
+    /// Include HTML→Markdown (default true). Prefer this over include_html for agents.
+    include_markdown: Option<bool>,
     max_text_chars: Option<usize>,
+    max_markdown_chars: Option<usize>,
     screenshot_out: Option<PathBuf>,
     full: Option<bool>,
 }
@@ -759,8 +879,21 @@ struct SelectorParams {
 }
 
 #[derive(Debug, Deserialize, Serialize, JsonSchema)]
+struct ClickParams {
+    /// CSS/DP selector. Prefer `ref` from browser_snapshot when available.
+    selector: Option<String>,
+    /// Interactive ref from browser_snapshot (`e1` or `ref:e1`).
+    #[serde(rename = "ref")]
+    ref_id: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize, JsonSchema)]
 struct TypeParams {
-    selector: String,
+    /// CSS/DP selector. Prefer `ref` from browser_snapshot when available.
+    selector: Option<String>,
+    /// Interactive ref from browser_snapshot (`e1` or `ref:e1`).
+    #[serde(rename = "ref")]
+    ref_id: Option<String>,
     text: String,
 }
 
@@ -978,6 +1111,8 @@ mod tests {
             "browser_use_tab",
             "browser_close",
             "browser_ax",
+            "browser_snapshot",
+            "browser_markdown",
             "browser_html",
             "browser_title",
             "browser_url",
@@ -1017,6 +1152,8 @@ mod tests {
                 "browser_use_tab",
                 "browser_close",
                 "browser_ax",
+                "browser_snapshot",
+                "browser_markdown",
                 "browser_html",
                 "browser_title",
                 "browser_url",

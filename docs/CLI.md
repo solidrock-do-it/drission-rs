@@ -54,6 +54,8 @@ drs --json tabs
 drs --json use 1
 drs ax --outline
 drs --json ax --json
+drs --json snapshot
+drs --json markdown
 drs html
 drs text h1
 drs eval "document.title"
@@ -448,6 +450,8 @@ drs mcp --headless --standalone
 - `browser_use_tab`
 - `browser_close`
 - `browser_ax`
+- `browser_snapshot`（**首选读页**：大纲 + `ref=eN` + HTML→Markdown + 短正文）
+- `browser_markdown`（只要 Markdown）
 - `browser_html`
 - `browser_title`
 - `browser_url`
@@ -475,10 +479,14 @@ drs mcp --headless --standalone
 - `identity_assets_health`
 - `identity_assets_sweep`
 
+`browser_snapshot` 是 AI 读当前页的首选工具:返回 `title` / `url` / `snapshot`(interesting-only 大纲,可交互节点带 `[ref=eN]`) / `refs` / **`markdown`(htmd 从 body HTML 转换)** / 截断正文。随后可用 `browser_click` / `browser_type` 传 `ref: "e1"`(或 `selector: "ref:e1"`)操作。完整无障碍树仍用 `browser_ax`;整页 HTML 用 `browser_html`(默认截断 20 万字符,防 MCP 卡退)。只要 Markdown 用 `browser_markdown` / `drs markdown`。
+
 `browser_press` 在当前标签按一个键(如 `Enter`、`Tab`、`Escape`、`ArrowDown`),可选 `selector` 先聚焦某元素再按;`browser_type` 只填字符、不产生按键提交,需要回车提交/切换焦点/方向键时用 `browser_press`。
 
 `browser_screenshot` 默认保存 PNG 并返回路径;传 `inline=true` 时同时返回 base64 与 MCP image content。
-`browser_extract` 打开 URL(或复用当前标签)并返回 `title` / `url` / `text` / `outline`;可选 `include_html`、`include_ax_json`、`pass_cf`、`wait_selector`、`screenshot_out`。
+`browser_extract` 打开 URL(或复用当前标签)并返回 `title` / `url` / `text` / `outline`;可选 `include_html`、`include_ax_json`、`pass_cf`、`wait_selector`、`screenshot_out`。`outline` 在重页上会短超时软失败并带 `outlineError`,不拖垮整包。
+
+防卡退:`DRS_MCP_TIMEOUT_MS` / `DRS_DAEMON_TIMEOUT_MS`(默认各 60000)限制 MCP/daemon RPC;超时返回 `timeout` 错误码而非挂死。详见 [`AI页面快照.md`](AI页面快照.md)。
 `browser_identity` / `browser_identity_pool` 接受可选 `gate_preset`、`min_score`、`max_linkability`、`max_concentration_ratio`、`max_concentrated_signals`、`fail_on_high_risk`、`fail_on_risky_pairs`,并在结构化结果里返回同样的 `gate` 对象。
 `identity_assets_*` 工具对齐同名 CLI 命令的 kebab-case 版本,但 MCP 参数使用 snake_case,例如 `identity_assets_gate` 传 `asset_manifest`、`desired_concurrency`、`max_wait_seconds`;`identity_assets_select` 可写 `asset_manifest_out` 来预留 `runtimeLease*`;`identity_assets_release` 的 `result_json` 可直接传 JSON 值。它们让 Agent 在启动业务自动化前完成容量门禁、恢复预测、profile 领取,并在业务结束后回写 release ledger、健康分和过期残留清理。
 
@@ -523,6 +531,7 @@ drs --json ocr clickword ./captcha.png 税实企
 | `daemon_unreachable` | state 文件存在但端口连不上 | 重启 `drs serve`;CLI 会移除 stale state |
 | `unauthorized` | token 不匹配 | 删除缓存中的 `drs-server.json` 或重启 daemon |
 | `command_failed` | 浏览器动作失败 | 查看 `message`;常见是 selector 未命中或页面超时 |
+| `timeout` | MCP/daemon 命令超时 | 页面可能对自动化不友好;改用 `browser_snapshot`,或提高 `DRS_MCP_TIMEOUT_MS` / `DRS_DAEMON_TIMEOUT_MS` |
 | `Session with given id not found` | active tab 对应的浏览器 target 已关闭,常见于打开会触发下载的 URL | 用 `drs open` 打开 HTML 页面;下载型资源用网络监听或 HTTP 客户端处理 |
 
 ## 设计边界
