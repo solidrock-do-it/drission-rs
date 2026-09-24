@@ -35,17 +35,17 @@ tools, data-processing scripts, and AI coding clients.
 
 ### Rust library
 
-The current repository and Release version is **v0.4.0**. Chromium/CDP is enabled by default.
+The current repository and Release version is **v0.6.4**. Chromium/CDP is enabled by default.
 The crates.io `drission` package is currently still at 0.3.2, so the commands below pin the
 published Git tag:
 
 ```bash
-cargo add drission --git https://github.com/MageGojo/drission-rs --tag v0.4.0
+cargo add drission --git https://github.com/MageGojo/drission-rs --tag v0.6.4
 ```
 
 ```toml
 [dependencies]
-drission = { git = "https://github.com/MageGojo/drission-rs", tag = "v0.4.0" }
+drission = { git = "https://github.com/MageGojo/drission-rs", tag = "v0.6.4" }
 tokio = { version = "1", features = ["full"] }
 ```
 
@@ -176,26 +176,6 @@ container and Linux system dependencies.
 - [API reference](https://docs.rs/drission): types, methods, and feature markers.
 - [Changelog](CHANGELOG.md): release features and compatibility changes.
 - [Contributing guide](CONTRIBUTING.md) and [security policy](SECURITY.md).
-
-## Responsible use
-
-Browser automation can process login state, personal data, copyrighted material, or operations with
-real business impact. Before deployment:
-
-1. Access only systems, accounts, and data that you own or have explicit written authorization to use.
-2. Follow applicable laws, contracts, platform terms, `robots.txt`, access controls, and rate limits.
-3. Do not bypass paywalls, authentication, CAPTCHAs, or other security controls; do not evade bans or impersonate others.
-4. Do not collect personal, confidential, copyrighted, or restricted data without the right to process it; minimize collected data.
-5. Put write, publish, purchase, and delete operations behind isolated tests, least privilege, and human confirmation.
-6. Protect browser profiles, cookies, logs, screenshots, and exports; do not commit sensitive data to version control.
-
-Optional OCR, image analysis, browser configuration, and network observation features do not grant
-permission to access any third-party system. Third-party names and trademarks belong to their
-respective owners; their mention does not imply endorsement, affiliation, or warranty.
-
-This section describes project usage boundaries. It is not legal advice and does not replace an
-assessment for your jurisdiction and use case. Report vulnerabilities privately through
-[SECURITY.md](SECURITY.md).
 
 ## License
 
