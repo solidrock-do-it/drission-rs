@@ -25,7 +25,7 @@ JSON 协议和本地 MCP 服务，适合测试工具、数据处理脚本和 AI 
 
 | 入口 | 适用场景 | 开始使用 |
 |---|---|---|
-| `drission` | 在 Rust 程序中控制浏览器 | 使用下方 v0.4.0 Git tag 命令 |
+| `drission` | 在 Rust 程序中控制浏览器 | 使用下方 v0.6.0 Git tag 命令 |
 | `drs` CLI | 从终端或脚本调用浏览器，获得稳定 JSON 输出 | 从 Release 下载预编译文件 |
 | `drs` MCP | 为 Cursor、Codex 等兼容 MCP 的本地客户端提供浏览器工具 | 安装 `drs` 后运行 `drs setup` |
 
@@ -33,16 +33,16 @@ JSON 协议和本地 MCP 服务，适合测试工具、数据处理脚本和 AI 
 
 ### Rust 库
 
-当前仓库与 Release 版本为 **v0.4.0**，默认启用 Chromium / CDP 后端。crates.io 上的
-`drission` 目前仍为 0.3.2，因此下面固定使用已发布的 Git tag：
+当前仓库与 Release 版本为 **v0.6.4**，默认启用 Chromium / CDP 后端。crates.io 上的
+`drission` 目前仍为 0.6.4，因此下面固定使用已发布的 Git tag：
 
 ```bash
-cargo add drission --git https://github.com/MageGojo/drission-rs --tag v0.4.0
+cargo add drission --git https://github.com/MageGojo/drission-rs --tag v0.6.4
 ```
 
 ```toml
 [dependencies]
-drission = { git = "https://github.com/MageGojo/drission-rs", tag = "v0.4.0" }
+drission = { git = "https://github.com/MageGojo/drission-rs", tag = "v0.6.4" }
 tokio = { version = "1", features = ["full"] }
 ```
 
@@ -164,32 +164,6 @@ CDP 与 Camoufox 两个后端的逐条能力对照与选型建议,见[后端能�
 - [API 参考](https://docs.rs/drission)：类型、方法和 feature 标记。
 - [更新日志](CHANGELOG.md)：发布版本的功能与兼容性变化。
 - [贡献指南](CONTRIBUTING.md)与[安全策略](SECURITY.md)。
-
-## 负责任使用
-
-浏览器自动化可能处理登录状态、个人信息、受版权保护的内容或会产生真实业务影响的操作。
-在部署前，请至少确认以下事项：
-
-1. 仅访问您拥有或已获得明确书面授权的系统、账户与数据。
-2. 遵守适用法律、合同、平台条款、`robots.txt`、访问控制和频率限制。
-3. 不绕过付费墙、身份验证、验证码或其他安全控制，不规避封禁或冒充他人身份。
-4. 不采集无权处理的个人、机密、受版权保护或其他受限制数据；遵循数据最小化原则。
-5. 对写入、发布、购买、删除等操作使用隔离测试环境、最小权限和人工确认。
-6. 妥善保护浏览器 profile、Cookie、日志、截图和导出文件，避免把敏感数据提交到版本库。
-
-可选的 OCR、图像分析、浏览器配置和网络观测能力不构成访问任何第三方系统的授权。
-项目名称及文档中提及的第三方商标归各自权利人所有，不代表其认可、合作或担保。
-
-本节是项目使用边界说明，不构成法律意见，也不能替代针对具体业务和司法辖区的专业评估。
-如发现安全问题，请按 [SECURITY.md](SECURITY.md) 使用私密渠道报告。
-
-## 许可证
-
-本项目采用自定义的 **source-available、非商业许可**，不是 OSI 认可的开源许可证。
-个人学习和合法非盈利使用须同时满足 [LICENSE](LICENSE) 的全部条款；商业使用、付费再分发、
-将本项目作为付费产品或服务的核心等情形，需要事先取得版权持有人的书面授权。
-
-使用者应自行评估其具体用途是否合规。许可证与免责声明不能排除适用法律下不可排除的责任。
 
 ## 致谢
 
